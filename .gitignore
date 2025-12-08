@@ -1,0 +1,13 @@
+﻿data/
+*.pyc
+__pycache__/
+node_modules/
+.env
+venv/
+*.mp4
+*.avi
+*.mov
+*.pt
+*.pth
+Thumbs.db
+.DS_Store
