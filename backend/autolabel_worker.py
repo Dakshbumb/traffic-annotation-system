@@ -13,9 +13,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-# Force CPU mode
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-os.environ["TORCH_CUDA_AVAILABLE"] = "0"
+# GPU mode enabled - will use CUDA if available
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Commented out to enable GPU
+# os.environ["TORCH_CUDA_AVAILABLE"] = "0"
 
 import cv2
 from ultralytics import YOLO
@@ -33,6 +33,7 @@ from config import (
     DEEPSORT_MAX_COSINE_DIST,
     DEEPSORT_NN_BUDGET,
     ENABLE_CLAHE,
+    DEVICE,
 )
 from preprocessing import preprocess_frame
 from postprocessing import apply_all_filters, get_class_confidence_threshold
@@ -64,8 +65,8 @@ def load_yolo_model() -> YOLO:
         try:
             logger.info(f"Loading YOLO model (attempt {attempt}/{MODEL_LOAD_MAX_RETRIES})...")
             model = YOLO(YOLO_MODEL_NAME)
-            model.to("cpu")
-            logger.info(f"YOLO model loaded: {YOLO_MODEL_NAME}")
+            model.to(DEVICE)
+            logger.info(f"YOLO model loaded: {YOLO_MODEL_NAME} on {DEVICE}")
             return model
         except Exception as e:
             logger.error(f"Failed to load YOLO model: {e}")
@@ -120,7 +121,7 @@ def create_tracker() -> DeepSort:
         nms_max_overlap=1.0,
         max_cosine_distance=DEEPSORT_MAX_COSINE_DIST,
         nn_budget=DEEPSORT_NN_BUDGET,
-        embedder_gpu=False,
+        embedder_gpu=DEVICE == "cuda",  # Use GPU if available
     )
 
 

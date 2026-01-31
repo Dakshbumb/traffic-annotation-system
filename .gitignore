@@ -1,13 +1,114 @@
-﻿data/
-*.pyc
+﻿# ===========================
+# Python
+# ===========================
 __pycache__/
-node_modules/
-.env
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ===========================
+# Virtual Environment
+# ===========================
 venv/
+ENV/
+env/
+.venv/
+
+# ===========================
+# IDE / Editor
+# ===========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ===========================
+# OS Generated
+# ===========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===========================
+# Environment Variables
+# ===========================
+.env
+.env.local
+.env.*.local
+
+# ===========================
+# Database
+# ===========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ===========================
+# Video / Media Files (too large for git)
+# ===========================
 *.mp4
 *.avi
 *.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+data/
+uploads/
+exports/
+
+# ===========================
+# Model Weights (download separately)
+# ===========================
 *.pt
 *.pth
-Thumbs.db
-.DS_Store
+*.onnx
+*.weights
+models/*.pt
+
+# ===========================
+# Logs and Cache
+# ===========================
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ===========================
+# Node.js (if any frontend)
+# ===========================
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# ===========================
+# Jupyter Notebooks
+# ===========================
+.ipynb_checkpoints/

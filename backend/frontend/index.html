@@ -361,7 +361,13 @@
       <span class="btn-icon">📤</span> Upload Video
     </button>
 
-    <!-- Auto-Label Button -->
+    <!-- Auto-Label Button with Frame Stride -->
+    <select id="frameStrideSelect" title="Frame Stride - process every Nth frame for speed">
+      <option value="1">Every frame (1x)</option>
+      <option value="3" selected>Every 3rd (3x faster)</option>
+      <option value="5">Every 5th (5x faster)</option>
+      <option value="10">Every 10th (10x faster)</option>
+    </select>
     <button class="btn" id="autolabelBtn">
       <span class="btn-icon">🤖</span> Start Auto-Label
     </button>
@@ -878,10 +884,11 @@
       btn.disabled = true;
 
       try {
+        const frameStride = parseInt(document.getElementById('frameStrideSelect').value) || 3;
         const res = await fetch('/api/autolabel/video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ video_id: VIDEO_ID })
+          body: JSON.stringify({ video_id: VIDEO_ID, frame_stride: frameStride })
         });
 
         if (res.ok) {

@@ -21,16 +21,32 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 
 # ---------- PERFORMANCE / ML CONFIG ----------
 
-# YOLO model to use (yolov8s = small, more accurate than nano)
-YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8s.pt")
+# YOLO model to use (yolov8m = medium, better accuracy for dashcam footage)
+YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8m.pt")
 
-# ---------- Compute device (FORCED CPU – RTX 50xx not supported yet) ----------
-DEVICE = "cpu"
-USE_FP16 = False
+# ---------- Compute device (Auto-detect GPU with compatibility check) ----------
+import torch
+import warnings
 
+def get_device():
+    """Detect available device with compatibility check."""
+    if not torch.cuda.is_available():
+        return "cpu"
+    
+    try:
+        # Test if CUDA actually works by running a small operation
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            test_tensor = torch.zeros(1).cuda()
+            _ = test_tensor + 1
+        return "cuda"
+    except Exception as e:
+        print(f"[config] CUDA test failed, falling back to CPU: {e}")
+        return "cpu"
 
-# Whether to use half precision on GPU (gives a big speedup on RTX)
-USE_FP16 = DEVICE != "cpu"
+DEVICE = get_device()
+USE_FP16 = DEVICE == "cuda"  # Use half precision on GPU for speedup
+print(f"[config] Using device: {DEVICE}")
 
 
 # Exports folder -> backend/exports
@@ -62,8 +78,8 @@ MAX_FRAME_WIDTH = int(os.getenv("MAX_FRAME_WIDTH", "1280"))
 
 # ---------- Autolabel / ML settings ----------
 
-# YOLO model name or path (yolov8s = small, better accuracy than nano)
-YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8s.pt")
+# YOLO model name or path (yolov8m = medium, better accuracy for dashcam footage)
+YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8m.pt")
 
 # How many jobs can be queued / run in parallel (used later if we add limits)
 AUTOLABEL_MAX_JOBS = int(os.getenv("AUTOLABEL_MAX_JOBS", "8"))
@@ -96,28 +112,28 @@ YOLO_COCO_CLASS_MAP = {
 }
 
 # Default thresholds for autolabel jobs
-AUTO_DEFAULT_CONF_TH = float(os.getenv("AUTO_DEFAULT_CONF_TH", "0.25"))  # Per spec: 0.25
-AUTO_DEFAULT_NMS_IOU = float(os.getenv("AUTO_DEFAULT_NMS_IOU", "0.45"))  # Per spec: 0.45
+AUTO_DEFAULT_CONF_TH = float(os.getenv("AUTO_DEFAULT_CONF_TH", "0.35"))  # Higher to reduce false positives
+AUTO_DEFAULT_NMS_IOU = float(os.getenv("AUTO_DEFAULT_NMS_IOU", "0.45"))  # Standard NMS
 AUTO_DEFAULT_FRAME_STRIDE = 1
 
 # ------------------------------
 # Per-class confidence thresholds (optional tuning)
 # ------------------------------
 CLASS_CONF_THRESHOLDS = {
-    "car": 0.25,
-    "truck": 0.25,
-    "bus": 0.25,
-    "motorcycle": 0.30,  # Slightly higher for smaller objects
-    "bicycle": 0.30,
-    "person": 0.35,      # Higher to reduce false positives
+    "car": 0.35,         # Higher to reduce false positives on shadows
+    "truck": 0.35,       # Same for trucks
+    "bus": 0.35,         # Same for buses
+    "motorcycle": 0.40,  # Higher for smaller objects
+    "bicycle": 0.40,     # Same for bicycles  
+    "person": 0.50,      # Much higher to reduce false positives
 }
 
 # ------------------------------
 # Post-processing filters
 # ------------------------------
-MIN_BOX_AREA = int(os.getenv("MIN_BOX_AREA", "400"))          # Minimum detection area in pixels
-ASPECT_RATIO_MIN = float(os.getenv("ASPECT_RATIO_MIN", "0.3")) # h/w ratio bounds
-ASPECT_RATIO_MAX = float(os.getenv("ASPECT_RATIO_MAX", "3.0"))
+MIN_BOX_AREA = int(os.getenv("MIN_BOX_AREA", "800"))           # Higher minimum to filter shadows
+ASPECT_RATIO_MIN = float(os.getenv("ASPECT_RATIO_MIN", "0.25")) # Reasonable ratio bounds
+ASPECT_RATIO_MAX = float(os.getenv("ASPECT_RATIO_MAX", "3.5"))
 EDGE_MARGIN = int(os.getenv("EDGE_MARGIN", "10"))              # Pixels from edge to filter
 
 # ------------------------------
@@ -134,4 +150,4 @@ DEEPSORT_NN_BUDGET = int(os.getenv("DEEPSORT_NN_BUDGET", "100"))      # Max samp
 ENABLE_CLAHE = os.getenv("ENABLE_CLAHE", "true").lower() == "true"    # Low-light enhancement
 CLAHE_CLIP_LIMIT = float(os.getenv("CLAHE_CLIP_LIMIT", "2.0"))
 CLAHE_TILE_SIZE = int(os.getenv("CLAHE_TILE_SIZE", "8"))
-YOLO_INPUT_SIZE = int(os.getenv("YOLO_INPUT_SIZE", "640"))            # 640 or 1280
+YOLO_INPUT_SIZE = int(os.getenv("YOLO_INPUT_SIZE", "1280"))           # 1280 for better small object detection
