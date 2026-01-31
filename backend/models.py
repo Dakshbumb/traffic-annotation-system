@@ -67,5 +67,42 @@ class AnalyticsLine(Base):
 
     video = relationship("Video", back_populates="analytics_lines")
 
-# Add back-reference to Video
+
+class LaneZone(Base):
+    """Defines a lane zone as a polygon for cut-in/cut-out detection."""
+    __tablename__ = "lane_zones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("videos.id"), index=True)
+    name = Column(String)                             # e.g., "Ego Lane", "Left Lane"
+    zone_type = Column(String)                        # "ego", "adjacent_left", "adjacent_right"
+    points = Column(JSON)                             # [[x1,y1], [x2,y2], [x3,y3], ...]  polygon vertices
+    color = Column(String, default="#22c55e")         # Display color
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    video = relationship("Video", back_populates="lane_zones")
+
+
+class LaneEvent(Base):
+    """Stores detected cut-in and cut-out events."""
+    __tablename__ = "lane_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("videos.id"), index=True)
+    track_id = Column(Integer, index=True)            # Vehicle track ID from DeepSORT
+    event_type = Column(String, index=True)           # "cut_in" or "cut_out"
+    frame_index = Column(Integer, index=True)         # Frame when event occurred
+    from_zone = Column(String)                        # Zone vehicle came from
+    to_zone = Column(String)                          # Zone vehicle moved to
+    confidence = Column(Float, default=1.0)           # Detection confidence
+    bbox = Column(JSON)                               # Bounding box at event: [x1, y1, x2, y2]
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    video = relationship("Video", back_populates="lane_events")
+
+
+# Add back-references to Video
 Video.analytics_lines = relationship("AnalyticsLine", back_populates="video", cascade="all, delete-orphan")
+Video.lane_zones = relationship("LaneZone", back_populates="video", cascade="all, delete-orphan")
+Video.lane_events = relationship("LaneEvent", back_populates="video", cascade="all, delete-orphan")
+

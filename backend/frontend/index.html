@@ -408,6 +408,7 @@
       <div class="mode-switch">
         <div class="mode-btn active" data-mode="edit" id="modeEdit">Annotation</div>
         <div class="mode-btn" data-mode="analytics" id="modeAnalytics">Analytics</div>
+        <div class="mode-btn" data-mode="lanes" id="modeLanes">Lanes</div>
       </div>
 
       <!-- EDIT MODE PANELS -->
@@ -458,6 +459,56 @@
         </div>
       </div>
 
+      <!-- LANES MODE PANELS -->
+      <div id="lanesPanel" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Lane Zones</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+            <button class="btn" id="drawEgoLaneBtn"
+              style="background: rgba(34, 197, 94, 0.2); border-color: #22c55e;">🛣️ Draw Ego Lane</button>
+            <button class="btn" id="drawLeftLaneBtn"
+              style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6;">⬅️ Draw Left Lane</button>
+            <button class="btn" id="drawRightLaneBtn"
+              style="background: rgba(168, 85, 247, 0.2); border-color: #a855f7;">➡️ Draw Right Lane</button>
+          </div>
+          <div id="laneZonesList"
+            style="display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto;">
+            <div style="text-align: center; padding: 10px; color: var(--text-muted); font-size: 12px;">No zones defined
+            </div>
+          </div>
+          <button class="btn" id="clearZonesBtn" style="margin-top: 8px; width: 100%; font-size: 11px;">🗑️ Clear All
+            Zones</button>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header">
+            <span class="card-title">Cut-in/Cut-out Events</span>
+            <button class="btn" id="analyzeLanesBtn" style="padding: 4px 8px; font-size: 11px;">▶️ Analyze</button>
+          </div>
+          <div id="laneEventsList"
+            style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
+            <div style="text-align: center; padding: 20px; color: var(--text-muted);">Run analysis to detect events
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header"><span class="card-title">Event Stats</span></div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-val" id="statCutIn">0</div>
+              <div class="stat-label">Cut-ins</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="statCutOut">0</div>
+              <div class="stat-label">Cut-outs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -471,8 +522,13 @@
     let lines = [];
     let selectedAnnotation = null;
     let frameImage = null;
-    let MODE = 'edit'; // 'edit' or 'analytics'
-    let DRAW_STATE = null; // { type: 'count', points: [] }
+    let MODE = 'edit'; // 'edit', 'analytics', or 'lanes'
+    let DRAW_STATE = null; // { type: 'count', points: [] } or { type: 'lane', zone_type: 'ego', points: [] }
+
+    // LANE STATE
+    let laneZones = [];
+    let laneEvents = [];
+    const ZONE_COLORS = { 'ego': '#22c55e', 'adjacent_left': '#3b82f6', 'adjacent_right': '#a855f7' };
 
     const CLASS_COLORS = { 'car': '#22c55e', 'truck': '#f97316', 'bus': '#eab308', 'motorcycle': '#06b6d4', 'bicycle': '#d946ef', 'person': '#ef4444' };
 
@@ -948,6 +1004,231 @@
 
       poll();
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // LANE ZONE FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    async function loadLaneZones() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/lanes/video/${VIDEO_ID}`);
+      laneZones = await res.json();
+      updateLaneZonesList();
+      render();
+    }
+
+    async function loadLaneEvents() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/lanes/events/${VIDEO_ID}`);
+      laneEvents = await res.json();
+      updateLaneEventsList();
+      updateLaneStats();
+    }
+
+    function updateLaneZonesList() {
+      const container = document.getElementById('laneZonesList');
+      if (!laneZones.length) {
+        container.innerHTML = '<div style="text-align: center; padding: 10px; color: var(--text-muted); font-size: 12px;">No zones defined</div>';
+        return;
+      }
+      container.innerHTML = laneZones.map(z => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; border-left: 3px solid ${z.color};">
+          <span style="font-size: 12px;">${z.name}</span>
+          <button onclick="deleteLaneZone(${z.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function updateLaneEventsList() {
+      const container = document.getElementById('laneEventsList');
+      if (!laneEvents.length) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Run analysis to detect events</div>';
+        return;
+      }
+      container.innerHTML = laneEvents.map(e => `
+        <div onclick="jumpToFrame(${e.frame_index})" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; cursor: pointer; border-left: 3px solid ${e.event_type === 'cut_in' ? '#f97316' : '#06b6d4'};">
+          <span style="font-size: 12px;">${e.event_type === 'cut_in' ? '🚗➡️' : '🚗⬅️'} Track ${e.track_id}</span>
+          <span style="font-size: 11px; color: var(--text-muted);">F${e.frame_index}</span>
+        </div>
+      `).join('');
+    }
+
+    function updateLaneStats() {
+      const cutIns = laneEvents.filter(e => e.event_type === 'cut_in').length;
+      const cutOuts = laneEvents.filter(e => e.event_type === 'cut_out').length;
+      document.getElementById('statCutIn').textContent = cutIns;
+      document.getElementById('statCutOut').textContent = cutOuts;
+    }
+
+    function jumpToFrame(frameIdx) {
+      loadFrame(frameIdx);
+    }
+
+    async function deleteLaneZone(zoneId) {
+      await fetch(`/api/lanes/${zoneId}`, { method: 'DELETE' });
+      loadLaneZones();
+      showToast('Lane zone deleted');
+    }
+
+    function startDrawingLane(zoneType) {
+      const names = { 'ego': 'Ego Lane', 'adjacent_left': 'Left Lane', 'adjacent_right': 'Right Lane' };
+      DRAW_STATE = { type: 'lane', zone_type: zoneType, name: names[zoneType], points: [], color: ZONE_COLORS[zoneType] };
+      showToast(`Click to draw ${names[zoneType]} polygon. Double-click to finish.`);
+    }
+
+    async function saveLaneZone() {
+      if (!DRAW_STATE || DRAW_STATE.type !== 'lane' || DRAW_STATE.points.length < 3) {
+        showToast('Need at least 3 points');
+        return;
+      }
+      await fetch('/api/lanes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_id: VIDEO_ID,
+          name: DRAW_STATE.name,
+          zone_type: DRAW_STATE.zone_type,
+          points: DRAW_STATE.points,
+          color: DRAW_STATE.color
+        })
+      });
+      DRAW_STATE = null;
+      loadLaneZones();
+      showToast('Lane zone saved!');
+    }
+
+    async function clearAllZones() {
+      if (!confirm('Delete all lane zones for this video?')) return;
+      await fetch(`/api/lanes/video/${VIDEO_ID}`, { method: 'DELETE' });
+      laneZones = [];
+      laneEvents = [];
+      updateLaneZonesList();
+      updateLaneEventsList();
+      updateLaneStats();
+      render();
+      showToast('All zones cleared');
+    }
+
+    async function analyzeLanes() {
+      const btn = document.getElementById('analyzeLanesBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Analyzing...';
+      try {
+        const res = await fetch(`/api/lanes/analyze/${VIDEO_ID}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Found ${data.events_detected} lane events!`);
+          loadLaneEvents();
+        } else {
+          showToast(data.detail || 'Analysis failed');
+        }
+      } catch (err) {
+        showToast('Analysis error: ' + err.message);
+      }
+      btn.disabled = false;
+      btn.textContent = '▶️ Analyze';
+    }
+
+    // Lane button handlers
+    document.getElementById('drawEgoLaneBtn')?.addEventListener('click', () => startDrawingLane('ego'));
+    document.getElementById('drawLeftLaneBtn')?.addEventListener('click', () => startDrawingLane('adjacent_left'));
+    document.getElementById('drawRightLaneBtn')?.addEventListener('click', () => startDrawingLane('adjacent_right'));
+    document.getElementById('clearZonesBtn')?.addEventListener('click', clearAllZones);
+    document.getElementById('analyzeLanesBtn')?.addEventListener('click', analyzeLanes);
+
+    // Lanes mode switch handler
+    document.getElementById('modeLanes')?.addEventListener('click', () => {
+      MODE = 'lanes';
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('modeLanes').classList.add('active');
+      document.getElementById('editPanel').style.display = 'none';
+      document.getElementById('analyticsPanel').style.display = 'none';
+      document.getElementById('lanesPanel').style.display = 'block';
+      loadLaneZones();
+      loadLaneEvents();
+    });
+
+    // Extend canvas click for lane drawing
+    const originalCanvasClick = canvas.onclick;
+    canvas.addEventListener('click', (e) => {
+      if (MODE === 'lanes' && DRAW_STATE && DRAW_STATE.type === 'lane') {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        DRAW_STATE.points.push([x, y]);
+        render();
+      }
+    });
+
+    canvas.addEventListener('dblclick', (e) => {
+      if (MODE === 'lanes' && DRAW_STATE && DRAW_STATE.type === 'lane') {
+        e.preventDefault();
+        saveLaneZone();
+      }
+    });
+
+    // Extend render to draw lane zones
+    const originalRender = window.render || function () { };
+    const extendedRender = function () {
+      // Draw lane zones (semi-transparent polygons)
+      if (MODE === 'lanes' || laneZones.length > 0) {
+        laneZones.forEach(zone => {
+          if (zone.points && zone.points.length >= 3) {
+            ctx.beginPath();
+            ctx.moveTo(zone.points[0][0], zone.points[0][1]);
+            zone.points.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+            ctx.closePath();
+            ctx.fillStyle = zone.color + '30';
+            ctx.fill();
+            ctx.strokeStyle = zone.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        });
+      }
+
+      // Draw in-progress lane polygon
+      if (DRAW_STATE && DRAW_STATE.type === 'lane' && DRAW_STATE.points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1]);
+        DRAW_STATE.points.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.strokeStyle = DRAW_STATE.color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw points
+        DRAW_STATE.points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
+          ctx.fillStyle = DRAW_STATE.color;
+          ctx.fill();
+        });
+      }
+
+      // Highlight vehicles with events on current frame
+      if (laneEvents.length > 0) {
+        const frameEvents = laneEvents.filter(e => e.frame_index === currentFrame);
+        frameEvents.forEach(evt => {
+          if (evt.bbox) {
+            ctx.strokeStyle = evt.event_type === 'cut_in' ? '#f97316' : '#06b6d4';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(evt.bbox[0], evt.bbox[1], evt.bbox[2] - evt.bbox[0], evt.bbox[3] - evt.bbox[1]);
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText(evt.event_type.toUpperCase().replace('_', '-'), evt.bbox[0], evt.bbox[1] - 5);
+          }
+        });
+      }
+    };
+
+    // Patch render function
+    const oldRenderFunc = render;
+    render = function () {
+      oldRenderFunc();
+      extendedRender();
+    };
 
     init();
   </script>

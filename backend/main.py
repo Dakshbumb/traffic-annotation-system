@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import Base, engine
 from routers import annotated_frames
-from routers import videos, annotations, export, autolabel, frames, analytics, monitoring
+from routers import videos, annotations, export, autolabel, frames, analytics, monitoring, lanes
 from autolabel_worker import start_worker
 
 Base.metadata.create_all(bind=engine)
@@ -32,6 +32,7 @@ app.include_router(annotated_frames.router)
 app.include_router(autolabel.router)
 app.include_router(analytics.router)
 app.include_router(monitoring.router)
+app.include_router(lanes.router)
 
 # Static files mount LAST (catches all remaining routes)
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
