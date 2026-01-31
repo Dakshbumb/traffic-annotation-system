@@ -445,7 +445,28 @@
         </div>
 
         <div class="card" style="margin-top: 16px;">
-          <div class="card-header"><span class="card-title">Live Stats (Video 19)</span></div>
+          <div class="card-header">
+            <span class="card-title">Speed Estimation</span>
+            <button class="btn" id="addCalibrationBtn" style="padding: 4px 8px; font-size: 11px;">📏 Calibrate</button>
+          </div>
+          <div id="calibrationInfo" style="font-size: 12px; color: var(--text-muted); padding: 10px;">
+            No calibration line. Draw one and enter distance.
+          </div>
+          <button class="btn" id="calculateSpeedBtn" style="width: 100%; margin-top: 8px;">⚡ Calculate Speeds</button>
+          <div class="stats-grid" style="margin-top: 12px;">
+            <div class="stat-box">
+              <div class="stat-val" id="statAvgSpeed">--</div>
+              <div class="stat-label">Avg km/h</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="statMaxSpeed">--</div>
+              <div class="stat-label">Max km/h</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header"><span class="card-title">Live Stats</span></div>
           <div class="stats-grid">
             <div class="stat-box">
               <div class="stat-val" id="statIn">0</div>
@@ -1228,7 +1249,165 @@
     render = function () {
       oldRenderFunc();
       extendedRender();
+      drawSpeedLabels();
     };
+
+    // ─────────────────────────────────────────────────────────────
+    // SPEED ESTIMATION FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    function startCalibration() {
+      DRAW_STATE = { type: 'calibration', points: [] };
+      showToast('Click 2 points to draw calibration line');
+    }
+
+    async function saveCalibrationLine() {
+      if (!DRAW_STATE || DRAW_STATE.points.length !== 2) {
+        showToast('Need exactly 2 points');
+        return;
+      }
+
+      const distance = prompt('Enter real-world distance in meters:', '20');
+      if (!distance || isNaN(parseFloat(distance))) {
+        showToast('Invalid distance');
+        DRAW_STATE = null;
+        render();
+        return;
+      }
+
+      await fetch('/api/analytics/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_id: VIDEO_ID,
+          name: 'Calibration Line',
+          line_type: 'calibration',
+          points: DRAW_STATE.points,
+          meta_data: { distance_meters: parseFloat(distance) }
+        })
+      });
+
+      DRAW_STATE = null;
+      loadLines();
+      updateCalibrationInfo();
+      showToast(`Calibration set: ${distance}m`);
+    }
+
+    async function updateCalibrationInfo() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/analytics/video/${VIDEO_ID}`);
+      const allLines = await res.json();
+      const calibLine = allLines.find(l => l.line_type === 'calibration');
+
+      const info = document.getElementById('calibrationInfo');
+      if (calibLine && calibLine.meta_data) {
+        info.innerHTML = `<span style="color: #22c55e;">✓</span> ${calibLine.meta_data.distance_meters || 0}m calibration set`;
+      } else {
+        info.textContent = 'No calibration line. Draw one and enter distance.';
+      }
+    }
+
+    async function calculateSpeeds() {
+      const btn = document.getElementById('calculateSpeedBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Calculating...';
+
+      try {
+        const res = await fetch(`/api/analytics/speed/${VIDEO_ID}`, { method: 'POST' });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(`Updated ${data.annotations_updated} annotations with speeds!`);
+          document.getElementById('statAvgSpeed').textContent = data.stats.avg || '--';
+          document.getElementById('statMaxSpeed').textContent = data.stats.max || '--';
+          // Reload current frame to show speeds
+          fetchAnnotations();
+        } else {
+          showToast(data.detail || 'Speed calculation failed');
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = '⚡ Calculate Speeds';
+    }
+
+    async function loadSpeedStats() {
+      if (!VIDEO_ID) return;
+      try {
+        const res = await fetch(`/api/analytics/speed/${VIDEO_ID}`);
+        const stats = await res.json();
+        document.getElementById('statAvgSpeed').textContent = stats.avg || '--';
+        document.getElementById('statMaxSpeed').textContent = stats.max || '--';
+      } catch (e) { }
+    }
+
+    function drawSpeedLabels() {
+      // Draw speed on each annotation that has it
+      annotations.forEach(ann => {
+        if (ann.extra_meta && ann.extra_meta.speed_kmh) {
+          const speed = ann.extra_meta.speed_kmh;
+          const x = ann.x2 - 5;
+          const y = ann.y1 + 15;
+
+          // Background
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(x - 40, y - 12, 45, 16);
+
+          // Speed text
+          ctx.fillStyle = speed > 80 ? '#ef4444' : speed > 50 ? '#f97316' : '#22c55e';
+          ctx.font = 'bold 11px Inter';
+          ctx.fillText(`${speed} km/h`, x - 38, y);
+        }
+      });
+    }
+
+    // Calibration button handlers
+    document.getElementById('addCalibrationBtn')?.addEventListener('click', startCalibration);
+    document.getElementById('calculateSpeedBtn')?.addEventListener('click', calculateSpeeds);
+
+    // Extend canvas click for calibration line
+    canvas.addEventListener('click', (e) => {
+      if (DRAW_STATE && DRAW_STATE.type === 'calibration') {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        DRAW_STATE.points.push([x, y]);
+
+        if (DRAW_STATE.points.length === 2) {
+          saveCalibrationLine();
+        } else {
+          render();
+        }
+      }
+    });
+
+    // Extend render for calibration line preview
+    const origExtendedRender = extendedRender;
+    extendedRender = function () {
+      origExtendedRender();
+
+      // Draw calibration line in progress
+      if (DRAW_STATE && DRAW_STATE.type === 'calibration' && DRAW_STATE.points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1]);
+        if (DRAW_STATE.points.length === 1) {
+          ctx.arc(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1], 6, 0, Math.PI * 2);
+        }
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    };
+
+    // Load calibration info on mode switch
+    document.getElementById('modeAnalytics')?.addEventListener('click', () => {
+      updateCalibrationInfo();
+      loadSpeedStats();
+    });
 
     init();
   </script>
