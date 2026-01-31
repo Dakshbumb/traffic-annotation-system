@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Traffic Annotation System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0f0f13;
+      --bg-secondary: #16161d;
+      --bg-tertiary: #1e1e28;
+      --bg-card: rgba(30, 30, 40, 0.8);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --info: #3b82f6;
+
+      --color-car: #22c55e;
+      --color-truck: #f97316;
+      --color-bus: #eab308;
+      --color-motorcycle: #06b6d4;
+      --color-bicycle: #d946ef;
+      --color-person: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(180deg, var(--bg-secondary) 0%, transparent 100%);
+      padding: 20px 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .logo h1 {
+      font-size: 20px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #fff 0%, #a0a0b0 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 15px 30px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .toolbar-divider {
+      width: 1px;
+      height: 30px;
+      background: var(--border-color);
+    }
+
+    select,
+    .btn {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    select:hover,
+    .btn:hover {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: var(--accent);
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Frame Nav */
+    .frame-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-tertiary);
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    .frame-nav button {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .frame-nav button:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    .frame-slider {
+      width: 200px;
+      height: 6px;
+      appearance: none;
+      background: var(--bg-primary);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .frame-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .frame-display {
+      font-size: 13px;
+      font-weight: 500;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    /* Layout */
+    .main-container {
+      display: flex;
+      height: calc(100vh - 140px);
+      padding: 20px;
+      gap: 20px;
+    }
+
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .canvas-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 8px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .canvas-footer {
+      padding: 12px 20px;
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-box {
+      background: var(--bg-primary);
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      padding: 12px 24px;
+      border-radius: 10px;
+      opacity: 0;
+      transition: 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .mode-switch {
+      display: flex;
+      background: var(--bg-tertiary);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 16px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 6px;
+      color: var(--text-muted);
+      transition: 0.2s;
+    }
+
+    .mode-btn.active {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">🚦</div>
+      <h1>SMART TRAFFIC ANNOTATION SYSTEM</h1>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <select id="videoSelect"></select>
+
+    <!-- Upload Button -->
+    <input type="file" id="videoFileInput" accept="video/*" style="display: none;" />
+    <button class="btn" id="uploadBtn" onclick="document.getElementById('videoFileInput').click()">
+      <span class="btn-icon">📤</span> Upload Video
+    </button>
+
+    <!-- Auto-Label Button -->
+    <button class="btn" id="autolabelBtn">
+      <span class="btn-icon">🤖</span> Start Auto-Label
+    </button>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="frame-nav">
+      <button id="prevFrame">◀</button>
+      <input type="range" id="slider" class="frame-slider" min="0" max="500" value="0" />
+      <button id="nextFrame">▶</button>
+      <div class="frame-display">Frame <strong id="frameNum">0</strong></div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+    <button class="btn" id="saveBtn"><span class="btn-icon">�</span> Run Analytics</button>
+  </div>
+
+  <div class="main-container">
+    <div class="canvas-container">
+      <div class="canvas-wrapper">
+        <canvas id="canvas" width="960" height="540"></canvas>
+      </div>
+      <div class="canvas-footer">
+        <div class="legend" id="annotationLegend">
+          <!-- Populated by JS -->
+          <span>Edit Mode: Click box to select, Drag to move</span>
+        </div>
+        <div class="legend" id="analyticsLegend" style="display: none;">
+          <span style="color: #f59e0b;">● Counting Line</span>
+          <span>Click 2 points to draw line</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+
+      <!-- Mode Switch -->
+      <div class="mode-switch">
+        <div class="mode-btn active" data-mode="edit" id="modeEdit">Annotation</div>
+        <div class="mode-btn" data-mode="analytics" id="modeAnalytics">Analytics</div>
+      </div>
+
+      <!-- EDIT MODE PANELS -->
+      <div id="editPanel">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Selected Object</span></div>
+          <div id="selectionInfo" style="color: var(--text-muted); text-align: center; padding: 20px;">
+            Select an annotation
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header"><span class="card-title">Shortcuts</span></div>
+          <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+            kbd [1-6]: Change Class<br>
+            kbd [Del]: Delete<br>
+            kbd [Arrow]: Navigate
+          </div>
+        </div>
+      </div>
+
+      <!-- ANALYTICS MODE PANELS -->
+      <div id="analyticsPanel" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Traffic Counting</span>
+            <button class="btn" id="addLineBtn" style="padding: 4px 8px; font-size: 11px;">+ New Line</button>
+          </div>
+
+          <div id="linesList" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Lines populated here -->
+            <div style="text-align: center; padding: 20px; color: var(--text-muted);">No counting lines</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <div class="card-header"><span class="card-title">Live Stats (Video 19)</span></div>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-val" id="statIn">0</div>
+              <div class="stat-label">Incoming</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="statOut">0</div>
+              <div class="stat-label">Outgoing</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // STATE
+    let VIDEO_ID = null;
+    let currentFrame = 0;
+    let annotations = [];
+    let lines = [];
+    let selectedAnnotation = null;
+    let frameImage = null;
+    let MODE = 'edit'; // 'edit' or 'analytics'
+    let DRAW_STATE = null; // { type: 'count', points: [] }
+
+    const CLASS_COLORS = { 'car': '#22c55e', 'truck': '#f97316', 'bus': '#eab308', 'motorcycle': '#06b6d4', 'bicycle': '#d946ef', 'person': '#ef4444' };
+
+    // ELEMENTS
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const slider = document.getElementById("slider");
+    const frameNum = document.getElementById("frameNum");
+
+    // INIT
+    async function init() {
+      const res = await fetch('/api/videos/');
+      const videos = await res.json();
+      if (videos.length) {
+        videos.forEach(v => {
+          const opt = document.createElement("option");
+          opt.value = v.id;
+          opt.textContent = v.original_filename;
+          document.getElementById("videoSelect").appendChild(opt);
+        });
+        VIDEO_ID = videos[0].id; // Default to video 19 usually
+        loadFrame(0);
+        loadLines();
+      }
+    }
+
+    // LOAD FRAME & ANNOTATIONS
+    async function loadFrame(idx) {
+      if (!VIDEO_ID) return;
+      currentFrame = idx;
+      slider.value = idx;
+      frameNum.textContent = idx;
+
+      frameImage = new Image();
+      frameImage.src = `/api/frames/video/${VIDEO_ID}/${idx}`;
+      frameImage.onload = () => {
+        canvas.width = frameImage.width;
+        canvas.height = frameImage.height;
+        fetchAnnotations();
+      };
+    }
+
+    async function fetchAnnotations() {
+      const res = await fetch(`/api/annotations/video/${VIDEO_ID}/frame/${currentFrame}`);
+      const data = await res.json();
+      annotations = data.annotations || [];
+      render();
+    }
+
+    async function loadLines() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/analytics/video/${VIDEO_ID}`);
+      lines = await res.json();
+      updateLinesList();
+      render();
+    }
+
+    // RENDER LOOP
+    function render() {
+      if (!frameImage) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(frameImage, 0, 0);
+
+      // Draw Annotations
+      annotations.forEach(ann => {
+        const color = CLASS_COLORS[ann.class_label] || '#fff';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        const w = ann.x2 - ann.x1;
+        const h = ann.y2 - ann.y1;
+
+        // Box
+        ctx.strokeRect(ann.x1, ann.y1, w, h);
+
+        // Label
+        ctx.fillStyle = color;
+        ctx.font = "bold 12px Inter";
+        const label = `${ann.class_label} #${ann.track_id || ''}`;
+        ctx.fillRect(ann.x1, ann.y1 - 20, ctx.measureText(label).width + 10, 20);
+        ctx.fillStyle = '#000';
+        ctx.fillText(label, ann.x1 + 5, ann.y1 - 5);
+      });
+
+      // Draw Analytics Lines
+      if (MODE === 'analytics') {
+        lines.forEach(line => {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(line.points[0][0], line.points[0][1]);
+          ctx.lineTo(line.points[1][0], line.points[1][1]);
+          ctx.stroke();
+
+          // Draw arrow/label
+          const midX = (line.points[0][0] + line.points[1][0]) / 2;
+          const midY = (line.points[0][1] + line.points[1][1]) / 2;
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(midX - 40, midY - 15, 80, 30);
+          ctx.fillStyle = '#000';
+          ctx.textAlign = 'center';
+
+          const stats = line.meta_data || { in: 0, out: 0 };
+          ctx.fillText(`In: ${stats.in} | Out: ${stats.out}`, midX, midY + 5);
+        });
+
+        // Draw line being created
+        if (DRAW_STATE && DRAW_STATE.points.length === 1) {
+          // We'd need mouse pos here, simplified for now
+        }
+      }
+    }
+
+    // UI HANDLERS
+    document.getElementById("slider").addEventListener("input", (e) => loadFrame(parseInt(e.target.value)));
+    document.getElementById("modeEdit").addEventListener("click", () => setMode('edit'));
+    document.getElementById("modeAnalytics").addEventListener("click", () => setMode('analytics'));
+
+    document.getElementById("addLineBtn").addEventListener("click", () => {
+      alert("Click 2 points on the video to draw a counting line.");
+      DRAW_STATE = { type: 'count', points: [] };
+    });
+
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      if (!VIDEO_ID) return;
+
+      const btn = document.getElementById("saveBtn");
+      const originalText = btn.innerHTML;
+      btn.innerHTML = "Processing...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`/api/analytics/process/${VIDEO_ID}`, { method: 'POST' });
+        if (!res.ok) throw new Error("Analysis failed");
+
+        await loadLines();
+        alert("Analytics processing complete! Stats updated.");
+      } catch (e) {
+        alert("Error running analytics: " + e.message);
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    });
+
+    // ============================================================
+    // SELECTION & INTERACTION
+    // ============================================================
+    function updateSelectionInfo() {
+      const info = document.getElementById("selectionInfo");
+      if (!selectedAnnotation) {
+        info.innerHTML = "Select an annotation";
+        return;
+      }
+
+      const ann = selectedAnnotation;
+      info.innerHTML = `
+            <div class="info-grid" style="display: grid; gap: 8px; text-align: left;">
+                <div class="info-row" style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Class</span>
+                    <span style="font-weight: bold; color: ${CLASS_COLORS[ann.class_label]}">${ann.class_label.toUpperCase()}</span>
+                </div>
+                <div class="info-row" style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Track ID</span>
+                    <span>${ann.track_id || 'ID ' + ann.id}</span>
+                </div>
+                <div class="info-row" style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Confidence</span>
+                    <span>${(ann.extra_meta && ann.extra_meta.confidence !== undefined) ? Number(ann.extra_meta.confidence).toFixed(2) : 'N/A'}</span>
+                </div>
+                <div class="info-row" style="display: flex; justify-content: space-between; font-size: 10px; color: #666;">
+                    <span>Raw Meta</span>
+                    <span>${JSON.stringify(ann.extra_meta || {})}</span>
+                </div>
+            </div>
+            <div style="margin-top: 12px; font-size: 11px; color: var(--text-secondary); text-align: center;">
+                Use keyboard 1-6 to change class<br>Del to delete
+            </div>`;
+    }
+
+    async function updateAnnotation(ann) {
+      try {
+        await fetch(`/api/annotations/${ann.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            class_label: ann.class_label,
+            x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2
+          })
+        });
+        showToast("Updated annotation");
+      } catch (e) {
+        console.error(e);
+        showToast("Failed to update", "error");
+      }
+    }
+
+    async function deleteAnnotation(ann) {
+      if (!confirm("Delete this annotation?")) return;
+      try {
+        await fetch(`/api/annotations/${ann.id}`, { method: 'DELETE' });
+        annotations = annotations.filter(a => a.id !== ann.id);
+        selectedAnnotation = null;
+        updateSelectionInfo();
+        render();
+        showToast("Deleted annotation");
+      } catch (e) {
+        showToast("Failed to delete", "error");
+      }
+    }
+
+    // MOUSE HANDLER
+    let dragStart = null;
+    let originalRect = null;
+
+    canvas.addEventListener("mousedown", async (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      // ANALYTICS MODE
+      if (MODE === 'analytics' && DRAW_STATE) {
+        DRAW_STATE.points.push([x, y]);
+        if (DRAW_STATE.points.length === 2) {
+          await fetch('/api/analytics/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              video_id: VIDEO_ID,
+              name: "New Line",
+              line_type: "count",
+              points: DRAW_STATE.points,
+              meta_data: { in: 0, out: 0 }
+            })
+          });
+          DRAW_STATE = null;
+          loadLines();
+          alert("Line saved!");
+        }
+        return;
+      }
+
+      // EDIT MODE
+      if (MODE === 'edit') {
+        // Check selection (prioritize smallest box)
+        const clicked = annotations
+          .filter(a => x >= a.x1 && x <= a.x2 && y >= a.y1 && y <= a.y2)
+          .sort((a, b) => ((a.x2 - a.x1) * (a.y2 - a.y1)) - ((b.x2 - b.x1) * (b.y2 - b.y1)))[0];
+
+        selectedAnnotation = clicked || null;
+        updateSelectionInfo();
+        render();
+
+        if (selectedAnnotation) {
+          dragStart = { x, y };
+          originalRect = { ...selectedAnnotation };
+        }
+      }
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      if (!dragStart || !selectedAnnotation || MODE !== 'edit') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      const dx = x - dragStart.x;
+      const dy = y - dragStart.y;
+
+      selectedAnnotation.x1 = originalRect.x1 + dx;
+      selectedAnnotation.y1 = originalRect.y1 + dy;
+      selectedAnnotation.x2 = originalRect.x2 + dx;
+      selectedAnnotation.y2 = originalRect.y2 + dy;
+      render();
+    });
+
+    canvas.addEventListener("mouseup", async () => {
+      if (dragStart && selectedAnnotation) {
+        await updateAnnotation(selectedAnnotation);
+      }
+      dragStart = null;
+    });
+
+    // Keyboard Shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (!selectedAnnotation) return;
+
+      // Classes 1-6
+      const CLASS_KEYS = { '1': 'car', '2': 'truck', '3': 'bus', '4': 'motorcycle', '5': 'bicycle', '6': 'person' };
+      if (CLASS_KEYS[e.key]) {
+        selectedAnnotation.class_label = CLASS_KEYS[e.key];
+        updateAnnotation(selectedAnnotation);
+        updateSelectionInfo();
+        render();
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        deleteAnnotation(selectedAnnotation);
+      }
+    });
+
+    function showToast(msg, type = "success") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = `toast ${type} show`;
+      setTimeout(() => t.classList.remove("show"), 3000);
+    }
+
+    function setMode(m) {
+      MODE = m;
+      document.getElementById("modeEdit").className = `mode-btn ${m === 'edit' ? 'active' : ''}`;
+      document.getElementById("modeAnalytics").className = `mode-btn ${m === 'analytics' ? 'active' : ''}`;
+
+      document.getElementById("editPanel").style.display = m === 'edit' ? 'block' : 'none';
+      document.getElementById("analyticsPanel").style.display = m === 'analytics' ? 'block' : 'none';
+
+      document.getElementById("annotationLegend").style.display = m === 'edit' ? 'flex' : 'none';
+      document.getElementById("analyticsLegend").style.display = m === 'analytics' ? 'flex' : 'none';
+      render();
+    }
+
+    function updateLinesList() {
+      const container = document.getElementById("linesList");
+      container.innerHTML = '';
+      if (lines.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No counting lines</div>';
+        return;
+      }
+
+      lines.forEach(l => {
+        const div = document.createElement("div");
+        div.className = "info-row";
+        div.innerHTML = `
+                <span class="info-label">${l.name}</span>
+                <span class="info-value" style="font-size: 11px;">In: ${l.meta_data?.in || 0} Out: ${l.meta_data?.out || 0}</span>
+                <button class="btn btn-danger" style="padding: 2px 6px; font-size: 10px;" onclick="deleteLine(${l.id})">X</button>
+            `;
+        container.appendChild(div);
+
+        // Update stats
+        document.getElementById("statIn").textContent = l.meta_data?.in || 0;
+        document.getElementById("statOut").textContent = l.meta_data?.out || 0;
+      });
+    }
+
+    window.deleteLine = async (id) => {
+      if (confirm("Delete line?")) {
+        await fetch(`/api/analytics/${id}`, { method: 'DELETE' });
+        loadLines();
+      }
+    };
+
+    // VIDEO UPLOAD HANDLER
+    document.getElementById('videoFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const uploadBtn = document.getElementById('uploadBtn');
+      uploadBtn.innerHTML = '<span class="btn-icon">⏳</span> Uploading...';
+      uploadBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/videos/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const video = await res.json();
+          // Add to dropdown and select it
+          const opt = document.createElement("option");
+          opt.value = video.id;
+          opt.textContent = video.original_filename;
+          document.getElementById("videoSelect").appendChild(opt);
+          document.getElementById("videoSelect").value = video.id;
+          VIDEO_ID = video.id;
+
+          alert(`Video uploaded successfully! ID: ${video.id}\nNow click "Start Auto-Label" to process it.`);
+          loadFrame(0);
+        } else {
+          const err = await res.json();
+          alert(`Upload failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (err) {
+        alert(`Upload error: ${err.message}`);
+      } finally {
+        uploadBtn.innerHTML = '<span class="btn-icon">📤</span> Upload Video';
+        uploadBtn.disabled = false;
+        e.target.value = ''; // Reset file input
+      }
+    });
+
+    // AUTO-LABEL HANDLER
+    document.getElementById('autolabelBtn').addEventListener('click', async () => {
+      if (!VIDEO_ID) {
+        alert('Please select or upload a video first.');
+        return;
+      }
+
+      const btn = document.getElementById('autolabelBtn');
+      btn.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/autolabel/video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_id: VIDEO_ID })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          alert(`Auto-labeling started! Job ID: ${data.job_id}\n\nThis may take a few minutes. Refresh the page to see progress.`);
+
+          // Poll for status
+          pollAutolabelStatus(data.job_id);
+        } else {
+          const err = await res.json();
+          alert(`Failed to start auto-label: ${err.detail || 'Unknown error'}`);
+          btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        alert(`Error: ${err.message}`);
+        btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+        btn.disabled = false;
+      }
+    });
+
+    async function pollAutolabelStatus(jobId) {
+      const btn = document.getElementById('autolabelBtn');
+
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/autolabel/jobs/${jobId}`);
+          const data = await res.json();
+
+          // Progress is 0.0 to 1.0, convert to percentage
+          const progress = Math.round((data.progress || 0) * 100);
+
+          if (data.status === 'running' || data.status === 'queued') {
+            btn.innerHTML = `<span class="btn-icon">⏳</span> ${progress}%`;
+            setTimeout(poll, 2000);
+          } else if (data.status === 'completed') {
+            btn.innerHTML = '<span class="btn-icon">✅</span> Done!';
+            alert('Auto-labeling complete! Loading annotations...');
+            loadFrame(0);
+            setTimeout(() => {
+              btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+              btn.disabled = false;
+            }, 2000);
+          } else if (data.status === 'failed') {
+            btn.innerHTML = '<span class="btn-icon">❌</span> Failed';
+            alert(`Auto-label failed: ${data.error_message || 'Unknown error'}`);
+            setTimeout(() => {
+              btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+              btn.disabled = false;
+            }, 2000);
+          }
+        } catch (err) {
+          btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+          btn.disabled = false;
+        }
+      };
+
+      poll();
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

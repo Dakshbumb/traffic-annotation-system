@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Traffic Annotation Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      text-align: center;
+    }
+
+    #container {
+      position: relative;
+      display: inline-block;
+    }
+
+    #frame {
+      max-width: 90vw;
+      border-radius: 6px;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+
+    .controls {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Smart Traffic Annotation Viewer</h2>
+
+  <div id="container">
+    <img id="frame" />
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="controls">
+    <label>Frame:
+      <input type="range" id="slider" min="0" max="300" value="0" />
+    </label>
+    <span id="frameNum">0</span>
+  </div>
+
+<script>
+const VIDEO_ID = 16;   // ← change if needed
+const img = document.getElementById("frame");
+const canvas = document.getElementById("overlay");
+const ctx = canvas.getContext("2d");
+const slider = document.getElementById("slider");
+const frameNum = document.getElementById("frameNum");
+
+function loadFrame(frameIndex) {
+  frameNum.innerText = frameIndex;
+
+  img.src = `/api/frames/video/${VIDEO_ID}/${frameIndex}`;
+
+  img.onload = async () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const res = await fetch(
+      `/api/annotations/video/${VIDEO_ID}/frame/${frameIndex}`
+    );
+    const data = await res.json();
+
+    drawAnnotations(data.annotations);
+  };
+}
+
+function drawAnnotations(annotations) {
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 2;
+  ctx.font = "14px Arial";
+  ctx.fillStyle = "lime";
+
+  annotations.forEach(a => {
+    const w = a.x2 - a.x1;
+    const h = a.y2 - a.y1;
+
+    ctx.strokeRect(a.x1, a.y1, w, h);
+    ctx.fillText(a.class_label, a.x1 + 4, a.y1 + 14);
+  });
+}
+
+slider.oninput = () => loadFrame(slider.value);
+
+// initial frame
+loadFrame(0);
+</script>
+
+</body>
+</html>
+
