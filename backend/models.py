@@ -101,8 +101,27 @@ class LaneEvent(Base):
     video = relationship("Video", back_populates="lane_events")
 
 
+class NearMissEvent(Base):
+    """Stores detected near-miss/collision risk events between two vehicles."""
+    __tablename__ = "near_miss_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("videos.id"), index=True)
+    frame_index = Column(Integer, index=True)
+    track_id_1 = Column(Integer)
+    track_id_2 = Column(Integer)
+    ttc: float = Column(Float)            # Time To Collision in seconds
+    distance: float = Column(Float)       # Pixel distance at event
+    relative_speed: float = Column(Float) # Relative speed in pixels/frame (or calibrated units)
+    severity = Column(String)             # "info", "warning", "critical"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    video = relationship("Video", back_populates="near_miss_events")
+
+
 # Add back-references to Video
 Video.analytics_lines = relationship("AnalyticsLine", back_populates="video", cascade="all, delete-orphan")
 Video.lane_zones = relationship("LaneZone", back_populates="video", cascade="all, delete-orphan")
 Video.lane_events = relationship("LaneEvent", back_populates="video", cascade="all, delete-orphan")
+Video.near_miss_events = relationship("NearMissEvent", back_populates="video", cascade="all, delete-orphan")
 
