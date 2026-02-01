@@ -21,12 +21,16 @@
 - 🚗 **Automatic Vehicle Detection** - YOLOv8-powered detection for cars, trucks, buses, motorcycles, bicycles, and pedestrians
 - 🔄 **Multi-Object Tracking** - DeepSORT algorithm for consistent vehicle tracking across frames
 - 📊 **Traffic Analytics** - Vehicle counting with customizable counting lines
+- ⚡ **Speed Estimation** - Real-world speed calculation with calibration lines
+- 🛣️ **Lane Analysis** - Cut-in/cut-out detection with customizable lane zones
+- ⚠️ **Safety Analysis** - Near-miss detection with Time-To-Collision (TTC) metrics
 - 🎨 **Interactive Annotation Editor** - Click-to-select, drag-to-move, keyboard shortcuts
 - 📤 **Multiple Export Formats** - COCO JSON, YOLO TXT, Pascal VOC XML, CSV
 - ⚡ **Frame Stride Processing** - Configurable speed (1x to 10x faster processing)
-- 🖥️ **Modern Web Interface** - Dark theme, real-time progress updates
+- 🖥️ **Modern Web Interface** - Dark theme, real-time progress updates, 4 analysis modes
 
 ---
+
 
 ## 📸 Screenshots
 
@@ -91,20 +95,31 @@ Click "Upload Video" and select your traffic footage (MP4, AVI, MOV supported)
 - Click "Start Auto-Label"
 - Wait for processing to complete
 
-### 3. Review & Edit Annotations
+### 3. Review & Edit Annotations (Edit Mode)
 - Use the frame slider to navigate
 - Click boxes to select
 - Keyboard shortcuts: `1-6` change class, `Del` delete
 
-### 4. Run Analytics (Optional)
-- Switch to Analytics mode
-- Draw counting lines
-- Click "Run Analytics" to count vehicles
+### 4. Analytics Mode
+- Draw **counting lines** to count vehicles In/Out
+- Draw a **calibration line** and enter real-world distance
+- Click "Calculate Speeds" for speed estimation
 
-### 5. Export
+### 5. Lanes Mode
+- Draw **Ego/Left/Right lane zones** as polygons
+- Click "Analyze" to detect **cut-in/cut-out** events
+- Click on events to jump to specific frames
+
+### 6. Safety Mode
+- Click "Scan Video" for **near-miss detection**
+- Uses Time-To-Collision (TTC) analysis
+- Critical/Warning severity classification
+
+### 7. Export
 Export annotations in COCO, YOLO, VOC, or CSV format
 
 ---
+
 
 ## 🏗️ Architecture
 
@@ -158,11 +173,16 @@ traffic-annotation-system/
 │   ├── schemas.py           # Pydantic schemas
 │   ├── crud.py              # Database operations
 │   ├── autolabel_worker.py  # YOLO + DeepSORT processing
+│   ├── speed_estimator.py   # Speed calculation module
+│   ├── lane_events.py       # Lane change detection
+│   ├── collision_detector.py # Near-miss/TTC analysis
 │   ├── routers/             # API endpoints
 │   │   ├── videos.py
 │   │   ├── annotations.py
 │   │   ├── frames.py
 │   │   ├── analytics.py
+│   │   ├── lanes.py
+│   │   ├── safety.py
 │   │   └── ...
 │   ├── exporters/           # Export format handlers
 │   ├── frontend/            # Static web files
@@ -175,6 +195,7 @@ traffic-annotation-system/
 ```
 
 ---
+
 
 ## ⚙️ Configuration
 

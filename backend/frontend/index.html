@@ -404,181 +404,340 @@
 
     <div class="sidebar">
 
-      <script>
-        // STATE
-        let VIDEO_ID = null;
-        let currentFrame = 0;
-        let annotations = [];
-        let lines = [];
-        let selectedAnnotation = null;
-        let frameImage = null;
-        let MODE = 'edit'; // 'edit', 'analytics', 'lanes', 'safety'
-        let DRAW_STATE = null; // { type: 'count', points: [] } or { type: 'lane', zone_type: 'ego', points: [] } or { type: 'calibration' }
+      <!-- Mode Switch -->
+      <div class="card" style="padding: 10px;">
+        <div class="mode-switch">
+          <div class="mode-btn active" id="modeEdit">Edit</div>
+          <div class="mode-btn" id="modeAnalytics">Analytics</div>
+          <div class="mode-btn" id="modeLanes">Lanes</div>
+          <div class="mode-btn" id="modeSafety">Safety</div>
+        </div>
+      </div>
 
-        // LANE STATE
-        let laneZones = [];
-        let laneEvents = [];
+      <!-- Edit Panel -->
+      <div class="card" id="editPanel">
+        <div class="card-header">
+          <span class="card-title">📋 Selection</span>
+        </div>
+        <div id="selectionInfo" style="text-align: center; color: var(--text-muted); font-size: 13px;">
+          Select an annotation
+        </div>
+      </div>
 
-        // SAFETY STATE
-        let safetyEvents = [];
+      <!-- Analytics Panel -->
+      <div class="card" id="analyticsPanel" style="display: none;">
+        <div class="card-header">
+          <span class="card-title">📈 Vehicle Counting</span>
+        </div>
+        <button class="btn" id="addLineBtn" style="width: 100%; margin-bottom: 12px;">
+          <span class="btn-icon">➕</span> Add Counting Line
+        </button>
+        <div id="linesList" style="max-height: 150px; overflow-y: auto; margin-bottom: 12px;">
+          <div style="text-align: center; padding: 20px; color: var(--text-muted);">No counting lines</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-val" id="statIn">0</div>
+            <div class="stat-label">Vehicles In</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="statOut">0</div>
+            <div class="stat-label">Vehicles Out</div>
+          </div>
+        </div>
 
-        const ZONE_COLORS = { 'ego': '#22c55e', 'adjacent_left': '#3b82f6', 'adjacent_right': '#a855f7' };
+        <div style="border-top: 1px solid var(--border-color); margin-top: 16px; padding-top: 16px;">
+          <div class="card-header" style="margin-bottom: 10px;">
+            <span class="card-title">⚡ Speed Estimation</span>
+          </div>
+          <div id="calibrationInfo" style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+            No calibration line. Draw one and enter distance.
+          </div>
+          <button class="btn" id="addCalibrationBtn" style="width: 100%; margin-bottom: 8px;">
+            <span class="btn-icon">📏</span> Draw Calibration Line
+          </button>
+          <button class="btn" id="calculateSpeedBtn" style="width: 100%; margin-bottom: 12px;">
+            <span class="btn-icon">⚡</span> Calculate Speeds
+          </button>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-val" id="statAvgSpeed">--</div>
+              <div class="stat-label">Avg km/h</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-val" id="statMaxSpeed">--</div>
+              <div class="stat-label">Max km/h</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        const CLASS_COLORS = { 'car': '#22c55e', 'truck': '#f97316', 'bus': '#eab308', 'motorcycle': '#06b6d4', 'bicycle': '#d946ef', 'person': '#ef4444' };
+      <!-- Lanes Panel -->
+      <div class="card" id="lanesPanel" style="display: none;">
+        <div class="card-header">
+          <span class="card-title">🛣️ Lane Zones</span>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+          <button class="btn" id="drawEgoLaneBtn" style="flex: 1; min-width: 80px;">
+            <span style="color: #22c55e;">●</span> Ego
+          </button>
+          <button class="btn" id="drawLeftLaneBtn" style="flex: 1; min-width: 80px;">
+            <span style="color: #3b82f6;">●</span> Left
+          </button>
+          <button class="btn" id="drawRightLaneBtn" style="flex: 1; min-width: 80px;">
+            <span style="color: #a855f7;">●</span> Right
+          </button>
+        </div>
+        <div id="laneZonesList"
+          style="max-height: 100px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="text-align: center; padding: 10px; color: var(--text-muted); font-size: 12px;">No zones defined
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button class="btn" id="clearZonesBtn" style="flex: 1;">🗑️ Clear All</button>
+          <button class="btn" id="analyzeLanesBtn" style="flex: 1;">▶️ Analyze</button>
+        </div>
 
-        // ELEMENTS
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        const slider = document.getElementById("slider");
-        const frameNum = document.getElementById("frameNum");
+        <div style="border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 12px;">
+          <div class="card-header" style="margin-bottom: 8px;">
+            <span class="card-title">📍 Lane Events</span>
+          </div>
+          <div id="laneEventsList"
+            style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+            <div style="text-align: center; padding: 20px; color: var(--text-muted);">Run analysis to detect events
+            </div>
+          </div>
+          <div class="stats-grid" style="margin-top: 12px;">
+            <div class="stat-box" style="border-left: 3px solid #f97316;">
+              <div class="stat-val" id="statCutIn">0</div>
+              <div class="stat-label">Cut-Ins</div>
+            </div>
+            <div class="stat-box" style="border-left: 3px solid #06b6d4;">
+              <div class="stat-val" id="statCutOut">0</div>
+              <div class="stat-label">Cut-Outs</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        // INIT
-        async function init() {
-          const res = await fetch('/api/videos/');
-          const videos = await res.json();
-          if (videos.length) {
-            videos.forEach(v => {
-              const opt = document.createElement("option");
-              opt.value = v.id;
-              opt.textContent = v.original_filename;
-              document.getElementById("videoSelect").appendChild(opt);
-            });
-            VIDEO_ID = videos[0].id; // Default to video 19 usually
-            loadFrame(0);
-            loadLines();
-          }
-        }
+      <!-- Safety Panel -->
+      <div class="card" id="safetyPanel" style="display: none;">
+        <div class="card-header">
+          <span class="card-title">⚠️ Safety Analysis</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+          Detect near-miss events and collision risks using Time-To-Collision (TTC) analysis.
+        </p>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button class="btn" id="analyzeSafetyBtn" style="flex: 2;">⚠️ Scan Video</button>
+          <button class="btn" id="clearSafetyBtn" style="flex: 1;">🗑️</button>
+        </div>
 
-        // LOAD FRAME & ANNOTATIONS
-        async function loadFrame(idx) {
-          if (!VIDEO_ID) return;
-          currentFrame = idx;
-          slider.value = idx;
-          frameNum.textContent = idx;
+        <div id="safetyEventsList"
+          style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+          <div style="text-align: center; padding: 20px; color: var(--text-muted);">Scan to detect near-misses</div>
+        </div>
 
-          frameImage = new Image();
-          frameImage.src = `/api/frames/video/${VIDEO_ID}/${idx}`;
-          frameImage.onload = () => {
-            canvas.width = frameImage.width;
-            canvas.height = frameImage.height;
-            fetchAnnotations();
-          };
-        }
+        <div class="stats-grid" style="margin-top: 12px;">
+          <div class="stat-box" style="border-left: 3px solid #ef4444;">
+            <div class="stat-val" id="statCritical">0</div>
+            <div class="stat-label">Critical</div>
+          </div>
+          <div class="stat-box" style="border-left: 3px solid #f59e0b;">
+            <div class="stat-val" id="statWarning">0</div>
+            <div class="stat-label">Warning</div>
+          </div>
+        </div>
+      </div>
 
-        async function fetchAnnotations() {
-          const res = await fetch(`/api/annotations/video/${VIDEO_ID}/frame/${currentFrame}`);
-          const data = await res.json();
-          annotations = data.annotations || [];
-          render();
-        }
+    </div><!-- end sidebar -->
 
-        async function loadLines() {
-          if (!VIDEO_ID) return;
-          const res = await fetch(`/api/analytics/video/${VIDEO_ID}`);
-          lines = await res.json();
-          updateLinesList();
-          render();
-        }
+    <!-- Toast Container -->
+    <div class="toast" id="toast"></div>
 
-        // RENDER LOOP
-        function render() {
-          if (!frameImage) return;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(frameImage, 0, 0);
+  </div><!-- end main-container -->
 
-          // Draw Annotations
-          annotations.forEach(ann => {
-            const color = CLASS_COLORS[ann.class_label] || '#fff';
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
-            const w = ann.x2 - ann.x1;
-            const h = ann.y2 - ann.y1;
+  <script>
+    // STATE
+    let VIDEO_ID = null;
+    let currentFrame = 0;
+    let annotations = [];
+    let lines = [];
+    let selectedAnnotation = null;
+    let frameImage = null;
+    let MODE = 'edit'; // 'edit', 'analytics', 'lanes', 'safety'
+    let DRAW_STATE = null; // { type: 'count', points: [] } or { type: 'lane', zone_type: 'ego', points: [] } or { type: 'calibration' }
 
-            // Box
-            ctx.strokeRect(ann.x1, ann.y1, w, h);
+    // LANE STATE
+    let laneZones = [];
+    let laneEvents = [];
 
-            // Label
-            ctx.fillStyle = color;
-            ctx.font = "bold 12px Inter";
-            const label = `${ann.class_label} #${ann.track_id || ''}`;
-            ctx.fillRect(ann.x1, ann.y1 - 20, ctx.measureText(label).width + 10, 20);
-            ctx.fillStyle = '#000';
-            ctx.fillText(label, ann.x1 + 5, ann.y1 - 5);
-          });
+    // SAFETY STATE
+    let safetyEvents = [];
 
-          // Draw Analytics Lines
-          if (MODE === 'analytics') {
-            lines.forEach(line => {
-              ctx.strokeStyle = '#f59e0b';
-              ctx.lineWidth = 4;
-              ctx.beginPath();
-              ctx.moveTo(line.points[0][0], line.points[0][1]);
-              ctx.lineTo(line.points[1][0], line.points[1][1]);
-              ctx.stroke();
+    const ZONE_COLORS = { 'ego': '#22c55e', 'adjacent_left': '#3b82f6', 'adjacent_right': '#a855f7' };
 
-              // Draw arrow/label
-              const midX = (line.points[0][0] + line.points[1][0]) / 2;
-              const midY = (line.points[0][1] + line.points[1][1]) / 2;
-              ctx.fillStyle = '#f59e0b';
-              ctx.fillRect(midX - 40, midY - 15, 80, 30);
-              ctx.fillStyle = '#000';
-              ctx.textAlign = 'center';
+    const CLASS_COLORS = { 'car': '#22c55e', 'truck': '#f97316', 'bus': '#eab308', 'motorcycle': '#06b6d4', 'bicycle': '#d946ef', 'person': '#ef4444' };
 
-              const stats = line.meta_data || { in: 0, out: 0 };
-              ctx.fillText(`In: ${stats.in} | Out: ${stats.out}`, midX, midY + 5);
-            });
+    // ELEMENTS
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const slider = document.getElementById("slider");
+    const frameNum = document.getElementById("frameNum");
 
-            // Draw line being created
-            if (DRAW_STATE && DRAW_STATE.points.length === 1) {
-              // We'd need mouse pos here, simplified for now
-            }
-          }
-        }
+    // INIT
+    async function init() {
+      const res = await fetch('/api/videos/');
+      const videos = await res.json();
+      if (videos.length) {
+        videos.forEach(v => {
+          const opt = document.createElement("option");
+          opt.value = v.id;
+          opt.textContent = v.original_filename;
+          document.getElementById("videoSelect").appendChild(opt);
+        });
+        VIDEO_ID = videos[0].id; // Default to video 19 usually
+        loadFrame(0);
+        loadLines();
+      }
+    }
 
-        // UI HANDLERS
-        document.getElementById("slider").addEventListener("input", (e) => loadFrame(parseInt(e.target.value)));
-        document.getElementById("modeEdit").addEventListener("click", () => setMode('edit'));
-        document.getElementById("modeAnalytics").addEventListener("click", () => setMode('analytics'));
+    // LOAD FRAME & ANNOTATIONS
+    async function loadFrame(idx) {
+      if (!VIDEO_ID) return;
+      currentFrame = idx;
+      slider.value = idx;
+      frameNum.textContent = idx;
 
-        document.getElementById("addLineBtn").addEventListener("click", () => {
-          alert("Click 2 points on the video to draw a counting line.");
-          DRAW_STATE = { type: 'count', points: [] };
+      frameImage = new Image();
+      frameImage.src = `/api/frames/video/${VIDEO_ID}/${idx}`;
+      frameImage.onload = () => {
+        canvas.width = frameImage.width;
+        canvas.height = frameImage.height;
+        fetchAnnotations();
+      };
+    }
+
+    async function fetchAnnotations() {
+      const res = await fetch(`/api/annotations/video/${VIDEO_ID}/frame/${currentFrame}`);
+      const data = await res.json();
+      annotations = data.annotations || [];
+      render();
+    }
+
+    async function loadLines() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/analytics/video/${VIDEO_ID}`);
+      lines = await res.json();
+      updateLinesList();
+      render();
+    }
+
+    // RENDER LOOP
+    function render() {
+      if (!frameImage) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(frameImage, 0, 0);
+
+      // Draw Annotations
+      annotations.forEach(ann => {
+        const color = CLASS_COLORS[ann.class_label] || '#fff';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        const w = ann.x2 - ann.x1;
+        const h = ann.y2 - ann.y1;
+
+        // Box
+        ctx.strokeRect(ann.x1, ann.y1, w, h);
+
+        // Label
+        ctx.fillStyle = color;
+        ctx.font = "bold 12px Inter";
+        const label = `${ann.class_label} #${ann.track_id || ''}`;
+        ctx.fillRect(ann.x1, ann.y1 - 20, ctx.measureText(label).width + 10, 20);
+        ctx.fillStyle = '#000';
+        ctx.fillText(label, ann.x1 + 5, ann.y1 - 5);
+      });
+
+      // Draw Analytics Lines
+      if (MODE === 'analytics') {
+        lines.forEach(line => {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(line.points[0][0], line.points[0][1]);
+          ctx.lineTo(line.points[1][0], line.points[1][1]);
+          ctx.stroke();
+
+          // Draw arrow/label
+          const midX = (line.points[0][0] + line.points[1][0]) / 2;
+          const midY = (line.points[0][1] + line.points[1][1]) / 2;
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(midX - 40, midY - 15, 80, 30);
+          ctx.fillStyle = '#000';
+          ctx.textAlign = 'center';
+
+          const stats = line.meta_data || { in: 0, out: 0 };
+          ctx.fillText(`In: ${stats.in} | Out: ${stats.out}`, midX, midY + 5);
         });
 
-        document.getElementById("saveBtn").addEventListener("click", async () => {
-          if (!VIDEO_ID) return;
+        // Draw line being created
+        if (DRAW_STATE && DRAW_STATE.points.length === 1) {
+          // We'd need mouse pos here, simplified for now
+        }
+      }
 
-          const btn = document.getElementById("saveBtn");
-          const originalText = btn.innerHTML;
-          btn.innerHTML = "Processing...";
-          btn.disabled = true;
+      // Draw Layers
+      if (typeof drawLanes === 'function') drawLanes();
+      if (typeof drawSpeedLabels === 'function') drawSpeedLabels();
+      if (typeof drawSafetyVisuals === 'function') drawSafetyVisuals();
+      if (typeof drawCalibrationPreview === 'function') drawCalibrationPreview();
+    }
 
-          try {
-            const res = await fetch(`/api/analytics/process/${VIDEO_ID}`, { method: 'POST' });
-            if (!res.ok) throw new Error("Analysis failed");
+    // UI HANDLERS
+    document.getElementById("slider").addEventListener("input", (e) => loadFrame(parseInt(e.target.value)));
+    document.getElementById("modeEdit").addEventListener("click", () => setMode('edit'));
+    document.getElementById("modeAnalytics").addEventListener("click", () => setMode('analytics'));
 
-            await loadLines();
-            alert("Analytics processing complete! Stats updated.");
-          } catch (e) {
-            alert("Error running analytics: " + e.message);
-          } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-          }
-        });
+    document.getElementById("addLineBtn").addEventListener("click", () => {
+      alert("Click 2 points on the video to draw a counting line.");
+      DRAW_STATE = { type: 'count', points: [] };
+    });
 
-        // ============================================================
-        // SELECTION & INTERACTION
-        // ============================================================
-        function updateSelectionInfo() {
-          const info = document.getElementById("selectionInfo");
-          if (!selectedAnnotation) {
-            info.innerHTML = "Select an annotation";
-            return;
-          }
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+      if (!VIDEO_ID) return;
 
-          const ann = selectedAnnotation;
-          info.innerHTML = `
+      const btn = document.getElementById("saveBtn");
+      const originalText = btn.innerHTML;
+      btn.innerHTML = "Processing...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`/api/analytics/process/${VIDEO_ID}`, { method: 'POST' });
+        if (!res.ok) throw new Error("Analysis failed");
+
+        await loadLines();
+        alert("Analytics processing complete! Stats updated.");
+      } catch (e) {
+        alert("Error running analytics: " + e.message);
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    });
+
+    // ============================================================
+    // SELECTION & INTERACTION
+    // ============================================================
+    function updateSelectionInfo() {
+      const info = document.getElementById("selectionInfo");
+      if (!selectedAnnotation) {
+        info.innerHTML = "Select an annotation";
+        return;
+      }
+
+      const ann = selectedAnnotation;
+      info.innerHTML = `
             <div class="info-grid" style="display: grid; gap: 8px; text-align: left;">
                 <div class="info-row" style="display: flex; justify-content: space-between;">
                     <span style="color: var(--text-muted);">Class</span>
@@ -600,746 +759,727 @@
             <div style="margin-top: 12px; font-size: 11px; color: var(--text-secondary); text-align: center;">
                 Use keyboard 1-6 to change class<br>Del to delete
             </div>`;
-        }
+    }
 
-        async function updateAnnotation(ann) {
-          try {
-            await fetch(`/api/annotations/${ann.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                class_label: ann.class_label,
-                x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2
-              })
-            });
-            showToast("Updated annotation");
-          } catch (e) {
-            console.error(e);
-            showToast("Failed to update", "error");
-          }
-        }
-
-        async function deleteAnnotation(ann) {
-          if (!confirm("Delete this annotation?")) return;
-          try {
-            await fetch(`/api/annotations/${ann.id}`, { method: 'DELETE' });
-            annotations = annotations.filter(a => a.id !== ann.id);
-            selectedAnnotation = null;
-            updateSelectionInfo();
-            render();
-            showToast("Deleted annotation");
-          } catch (e) {
-            showToast("Failed to delete", "error");
-          }
-        }
-
-        // MOUSE HANDLER
-        let dragStart = null;
-        let originalRect = null;
-
-        canvas.addEventListener("mousedown", async (e) => {
-          const rect = canvas.getBoundingClientRect();
-          const scaleX = canvas.width / rect.width;
-          const scaleY = canvas.height / rect.height;
-          const x = (e.clientX - rect.left) * scaleX;
-          const y = (e.clientY - rect.top) * scaleY;
-
-          // ANALYTICS MODE
-          if (MODE === 'analytics' && DRAW_STATE) {
-            DRAW_STATE.points.push([x, y]);
-            if (DRAW_STATE.points.length === 2) {
-              await fetch('/api/analytics/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  video_id: VIDEO_ID,
-                  name: "New Line",
-                  line_type: "count",
-                  points: DRAW_STATE.points,
-                  meta_data: { in: 0, out: 0 }
-                })
-              });
-              DRAW_STATE = null;
-              loadLines();
-              alert("Line saved!");
-            }
-            return;
-          }
-
-          // EDIT MODE
-          if (MODE === 'edit') {
-            // Check selection (prioritize smallest box)
-            const clicked = annotations
-              .filter(a => x >= a.x1 && x <= a.x2 && y >= a.y1 && y <= a.y2)
-              .sort((a, b) => ((a.x2 - a.x1) * (a.y2 - a.y1)) - ((b.x2 - b.x1) * (b.y2 - b.y1)))[0];
-
-            selectedAnnotation = clicked || null;
-            updateSelectionInfo();
-            render();
-
-            if (selectedAnnotation) {
-              dragStart = { x, y };
-              originalRect = { ...selectedAnnotation };
-            }
-          }
+    async function updateAnnotation(ann) {
+      try {
+        await fetch(`/api/annotations/${ann.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            class_label: ann.class_label,
+            x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2
+          })
         });
+        showToast("Updated annotation");
+      } catch (e) {
+        console.error(e);
+        showToast("Failed to update", "error");
+      }
+    }
 
-        canvas.addEventListener("mousemove", (e) => {
-          if (!dragStart || !selectedAnnotation || MODE !== 'edit') return;
+    async function deleteAnnotation(ann) {
+      if (!confirm("Delete this annotation?")) return;
+      try {
+        await fetch(`/api/annotations/${ann.id}`, { method: 'DELETE' });
+        annotations = annotations.filter(a => a.id !== ann.id);
+        selectedAnnotation = null;
+        updateSelectionInfo();
+        render();
+        showToast("Deleted annotation");
+      } catch (e) {
+        showToast("Failed to delete", "error");
+      }
+    }
 
-          const rect = canvas.getBoundingClientRect();
-          const scaleX = canvas.width / rect.width;
-          const scaleY = canvas.height / rect.height;
-          const x = (e.clientX - rect.left) * scaleX;
-          const y = (e.clientY - rect.top) * scaleY;
+    // MOUSE HANDLER
+    let dragStart = null;
+    let originalRect = null;
 
-          const dx = x - dragStart.x;
-          const dy = y - dragStart.y;
+    canvas.addEventListener("mousedown", async (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
 
-          selectedAnnotation.x1 = originalRect.x1 + dx;
-          selectedAnnotation.y1 = originalRect.y1 + dy;
-          selectedAnnotation.x2 = originalRect.x2 + dx;
-          selectedAnnotation.y2 = originalRect.y2 + dy;
-          render();
-        });
-
-        canvas.addEventListener("mouseup", async () => {
-          if (dragStart && selectedAnnotation) {
-            await updateAnnotation(selectedAnnotation);
-          }
-          dragStart = null;
-        });
-
-        // Keyboard Shortcuts
-        document.addEventListener("keydown", (e) => {
-          if (!selectedAnnotation) return;
-
-          // Classes 1-6
-          const CLASS_KEYS = { '1': 'car', '2': 'truck', '3': 'bus', '4': 'motorcycle', '5': 'bicycle', '6': 'person' };
-          if (CLASS_KEYS[e.key]) {
-            selectedAnnotation.class_label = CLASS_KEYS[e.key];
-            updateAnnotation(selectedAnnotation);
-            updateSelectionInfo();
-            render();
-          }
-
-          if (e.key === "Delete" || e.key === "Backspace") {
-            deleteAnnotation(selectedAnnotation);
-          }
-        });
-
-        function showToast(msg, type = "success") {
-          const t = document.getElementById("toast");
-          t.textContent = msg;
-          t.className = `toast ${type} show`;
-          setTimeout(() => t.classList.remove("show"), 3000);
-        }
-
-        function setMode(m) {
-          MODE = m;
-          document.getElementById("modeEdit").className = `mode-btn ${m === 'edit' ? 'active' : ''}`;
-          document.getElementById("modeAnalytics").className = `mode-btn ${m === 'analytics' ? 'active' : ''}`;
-
-          document.getElementById("editPanel").style.display = m === 'edit' ? 'block' : 'none';
-          document.getElementById("analyticsPanel").style.display = m === 'analytics' ? 'block' : 'none';
-
-          document.getElementById("annotationLegend").style.display = m === 'edit' ? 'flex' : 'none';
-          document.getElementById("analyticsLegend").style.display = m === 'analytics' ? 'flex' : 'none';
-          render();
-        }
-
-        function updateLinesList() {
-          const container = document.getElementById("linesList");
-          container.innerHTML = '';
-          if (lines.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No counting lines</div>';
-            return;
-          }
-
-          lines.forEach(l => {
-            const div = document.createElement("div");
-            div.className = "info-row";
-            div.innerHTML = `
-                <span class="info-label">${l.name}</span>
-                <span class="info-value" style="font-size: 11px;">In: ${l.meta_data?.in || 0} Out: ${l.meta_data?.out || 0}</span>
-                <button class="btn btn-danger" style="padding: 2px 6px; font-size: 10px;" onclick="deleteLine(${l.id})">X</button>
-            `;
-            container.appendChild(div);
-
-            // Update stats
-            document.getElementById("statIn").textContent = l.meta_data?.in || 0;
-            document.getElementById("statOut").textContent = l.meta_data?.out || 0;
-          });
-        }
-
-        window.deleteLine = async (id) => {
-          if (confirm("Delete line?")) {
-            await fetch(`/api/analytics/${id}`, { method: 'DELETE' });
-            loadLines();
-          }
-        };
-
-        // VIDEO UPLOAD HANDLER
-        document.getElementById('videoFileInput').addEventListener('change', async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-
-          const uploadBtn = document.getElementById('uploadBtn');
-          uploadBtn.innerHTML = '<span class="btn-icon">⏳</span> Uploading...';
-          uploadBtn.disabled = true;
-
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const res = await fetch('/api/videos/upload', {
-              method: 'POST',
-              body: formData
-            });
-
-            if (res.ok) {
-              const video = await res.json();
-              // Add to dropdown and select it
-              const opt = document.createElement("option");
-              opt.value = video.id;
-              opt.textContent = video.original_filename;
-              document.getElementById("videoSelect").appendChild(opt);
-              document.getElementById("videoSelect").value = video.id;
-              VIDEO_ID = video.id;
-
-              alert(`Video uploaded successfully! ID: ${video.id}\nNow click "Start Auto-Label" to process it.`);
-              loadFrame(0);
-            } else {
-              const err = await res.json();
-              alert(`Upload failed: ${err.detail || 'Unknown error'}`);
-            }
-          } catch (err) {
-            alert(`Upload error: ${err.message}`);
-          } finally {
-            uploadBtn.innerHTML = '<span class="btn-icon">📤</span> Upload Video';
-            uploadBtn.disabled = false;
-            e.target.value = ''; // Reset file input
-          }
-        });
-
-        // AUTO-LABEL HANDLER
-        document.getElementById('autolabelBtn').addEventListener('click', async () => {
-          if (!VIDEO_ID) {
-            alert('Please select or upload a video first.');
-            return;
-          }
-
-          const btn = document.getElementById('autolabelBtn');
-          btn.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
-          btn.disabled = true;
-
-          try {
-            const frameStride = parseInt(document.getElementById('frameStrideSelect').value) || 3;
-            const res = await fetch('/api/autolabel/video', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ video_id: VIDEO_ID, frame_stride: frameStride })
-            });
-
-            if (res.ok) {
-              const data = await res.json();
-              alert(`Auto-labeling started! Job ID: ${data.job_id}\n\nThis may take a few minutes. Refresh the page to see progress.`);
-
-              // Poll for status
-              pollAutolabelStatus(data.job_id);
-            } else {
-              const err = await res.json();
-              alert(`Failed to start auto-label: ${err.detail || 'Unknown error'}`);
-              btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
-              btn.disabled = false;
-            }
-          } catch (err) {
-            alert(`Error: ${err.message}`);
-            btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
-            btn.disabled = false;
-          }
-        });
-
-        async function pollAutolabelStatus(jobId) {
-          const btn = document.getElementById('autolabelBtn');
-
-          const poll = async () => {
-            try {
-              const res = await fetch(`/api/autolabel/jobs/${jobId}`);
-              const data = await res.json();
-
-              // Progress is 0.0 to 1.0, convert to percentage
-              const progress = Math.round((data.progress || 0) * 100);
-
-              if (data.status === 'running' || data.status === 'queued') {
-                btn.innerHTML = `<span class="btn-icon">⏳</span> ${progress}%`;
-                setTimeout(poll, 2000);
-              } else if (data.status === 'completed') {
-                btn.innerHTML = '<span class="btn-icon">✅</span> Done!';
-                alert('Auto-labeling complete! Loading annotations...');
-                loadFrame(0);
-                setTimeout(() => {
-                  btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
-                  btn.disabled = false;
-                }, 2000);
-              } else if (data.status === 'failed') {
-                btn.innerHTML = '<span class="btn-icon">❌</span> Failed';
-                alert(`Auto-label failed: ${data.error_message || 'Unknown error'}`);
-                setTimeout(() => {
-                  btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
-                  btn.disabled = false;
-                }, 2000);
-              }
-            } catch (err) {
-              btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
-              btn.disabled = false;
-            }
-          };
-
-          poll();
-        }
-
-        // ─────────────────────────────────────────────────────────────
-        // LANE ZONE FUNCTIONS
-        // ─────────────────────────────────────────────────────────────
-
-        async function loadLaneZones() {
-          if (!VIDEO_ID) return;
-          const res = await fetch(`/api/lanes/video/${VIDEO_ID}`);
-          laneZones = await res.json();
-          updateLaneZonesList();
-          render();
-        }
-
-        async function loadLaneEvents() {
-          if (!VIDEO_ID) return;
-          const res = await fetch(`/api/lanes/events/${VIDEO_ID}`);
-          laneEvents = await res.json();
-          updateLaneEventsList();
-          updateLaneStats();
-        }
-
-        function updateLaneZonesList() {
-          const container = document.getElementById('laneZonesList');
-          if (!laneZones.length) {
-            container.innerHTML = '<div style="text-align: center; padding: 10px; color: var(--text-muted); font-size: 12px;">No zones defined</div>';
-            return;
-          }
-          container.innerHTML = laneZones.map(z => `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; border-left: 3px solid ${z.color};">
-          <span style="font-size: 12px;">${z.name}</span>
-          <button onclick="deleteLaneZone(${z.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;">✕</button>
-        </div>
-      `).join('');
-        }
-
-        function updateLaneEventsList() {
-          const container = document.getElementById('laneEventsList');
-          if (!laneEvents.length) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Run analysis to detect events</div>';
-            return;
-          }
-          container.innerHTML = laneEvents.map(e => `
-        <div onclick="jumpToFrame(${e.frame_index})" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; cursor: pointer; border-left: 3px solid ${e.event_type === 'cut_in' ? '#f97316' : '#06b6d4'};">
-          <span style="font-size: 12px;">${e.event_type === 'cut_in' ? '🚗➡️' : '🚗⬅️'} Track ${e.track_id}</span>
-          <span style="font-size: 11px; color: var(--text-muted);">F${e.frame_index}</span>
-        </div>
-      `).join('');
-        }
-
-        function updateLaneStats() {
-          const cutIns = laneEvents.filter(e => e.event_type === 'cut_in').length;
-          const cutOuts = laneEvents.filter(e => e.event_type === 'cut_out').length;
-          document.getElementById('statCutIn').textContent = cutIns;
-          document.getElementById('statCutOut').textContent = cutOuts;
-        }
-
-        function jumpToFrame(frameIdx) {
-          loadFrame(frameIdx);
-        }
-
-        async function deleteLaneZone(zoneId) {
-          await fetch(`/api/lanes/${zoneId}`, { method: 'DELETE' });
-          loadLaneZones();
-          showToast('Lane zone deleted');
-        }
-
-        function startDrawingLane(zoneType) {
-          const names = { 'ego': 'Ego Lane', 'adjacent_left': 'Left Lane', 'adjacent_right': 'Right Lane' };
-          DRAW_STATE = { type: 'lane', zone_type: zoneType, name: names[zoneType], points: [], color: ZONE_COLORS[zoneType] };
-          showToast(`Click to draw ${names[zoneType]} polygon. Double-click to finish.`);
-        }
-
-        async function saveLaneZone() {
-          if (!DRAW_STATE || DRAW_STATE.type !== 'lane' || DRAW_STATE.points.length < 3) {
-            showToast('Need at least 3 points');
-            return;
-          }
-          await fetch('/api/lanes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              video_id: VIDEO_ID,
-              name: DRAW_STATE.name,
-              zone_type: DRAW_STATE.zone_type,
-              points: DRAW_STATE.points,
-              color: DRAW_STATE.color
-            })
-          });
-          DRAW_STATE = null;
-          loadLaneZones();
-          showToast('Lane zone saved!');
-        }
-
-        async function clearAllZones() {
-          if (!confirm('Delete all lane zones for this video?')) return;
-          await fetch(`/api/lanes/video/${VIDEO_ID}`, { method: 'DELETE' });
-          laneZones = [];
-          laneEvents = [];
-          updateLaneZonesList();
-          updateLaneEventsList();
-          updateLaneStats();
-          render();
-          showToast('All zones cleared');
-        }
-
-        async function analyzeLanes() {
-          const btn = document.getElementById('analyzeLanesBtn');
-          btn.disabled = true;
-          btn.textContent = '⏳ Analyzing...';
-          try {
-            const res = await fetch(`/api/lanes/analyze/${VIDEO_ID}`, { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-              showToast(`Found ${data.events_detected} lane events!`);
-              loadLaneEvents();
-            } else {
-              showToast(data.detail || 'Analysis failed');
-            }
-          } catch (err) {
-            showToast('Analysis error: ' + err.message);
-          }
-          btn.disabled = false;
-          btn.textContent = '▶️ Analyze';
-        }
-
-        // Lane button handlers
-        document.getElementById('drawEgoLaneBtn')?.addEventListener('click', () => startDrawingLane('ego'));
-        document.getElementById('drawLeftLaneBtn')?.addEventListener('click', () => startDrawingLane('adjacent_left'));
-        document.getElementById('drawRightLaneBtn')?.addEventListener('click', () => startDrawingLane('adjacent_right'));
-        document.getElementById('clearZonesBtn')?.addEventListener('click', clearAllZones);
-        document.getElementById('analyzeLanesBtn')?.addEventListener('click', analyzeLanes);
-
-        // Lanes mode switch handler
-        document.getElementById('modeLanes')?.addEventListener('click', () => {
-          MODE = 'lanes';
-          document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-          document.getElementById('modeLanes').classList.add('active');
-          document.getElementById('editPanel').style.display = 'none';
-          document.getElementById('analyticsPanel').style.display = 'none';
-          document.getElementById('lanesPanel').style.display = 'block';
-          loadLaneZones();
-          loadLaneEvents();
-        });
-
-        // Extend canvas click for lane drawing
-        const originalCanvasClick = canvas.onclick;
-        canvas.addEventListener('click', (e) => {
-          if (MODE === 'lanes' && DRAW_STATE && DRAW_STATE.type === 'lane') {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            DRAW_STATE.points.push([x, y]);
-            render();
-          }
-        });
-
-        canvas.addEventListener('dblclick', (e) => {
-          if (MODE === 'lanes' && DRAW_STATE && DRAW_STATE.type === 'lane') {
-            e.preventDefault();
-            saveLaneZone();
-          }
-        });
-
-        // Extend render to draw lane zones
-        const originalRender = window.render || function () { };
-        const extendedRender = function () {
-          // Draw lane zones (semi-transparent polygons)
-          if (MODE === 'lanes' || laneZones.length > 0) {
-            laneZones.forEach(zone => {
-              if (zone.points && zone.points.length >= 3) {
-                ctx.beginPath();
-                ctx.moveTo(zone.points[0][0], zone.points[0][1]);
-                zone.points.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-                ctx.closePath();
-                ctx.fillStyle = zone.color + '30';
-                ctx.fill();
-                ctx.strokeStyle = zone.color;
-                ctx.lineWidth = 2;
-                ctx.stroke();
-              }
-            });
-          }
-
-          // Draw in-progress lane polygon
-          if (DRAW_STATE && DRAW_STATE.type === 'lane' && DRAW_STATE.points.length > 0) {
-            ctx.beginPath();
-            ctx.moveTo(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1]);
-            DRAW_STATE.points.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
-            ctx.strokeStyle = DRAW_STATE.color;
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Draw points
-            DRAW_STATE.points.forEach(p => {
-              ctx.beginPath();
-              ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
-              ctx.fillStyle = DRAW_STATE.color;
-              ctx.fill();
-            });
-          }
-
-          // Highlight vehicles with events on current frame
-          if (laneEvents.length > 0) {
-            const frameEvents = laneEvents.filter(e => e.frame_index === currentFrame);
-            frameEvents.forEach(evt => {
-              if (evt.bbox) {
-                ctx.strokeStyle = evt.event_type === 'cut_in' ? '#f97316' : '#06b6d4';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(evt.bbox[0], evt.bbox[1], evt.bbox[2] - evt.bbox[0], evt.bbox[3] - evt.bbox[1]);
-                ctx.fillStyle = ctx.strokeStyle;
-                ctx.font = 'bold 14px Inter';
-                ctx.fillText(evt.event_type.toUpperCase().replace('_', '-'), evt.bbox[0], evt.bbox[1] - 5);
-              }
-            });
-          }
-        };
-
-        // Patch render function
-        const oldRenderFunc = render;
-        render = function () {
-          oldRenderFunc();
-          extendedRender();
-          drawSpeedLabels();
-          drawSafetyVisuals();
-        };
-
-        // ─────────────────────────────────────────────────────────────
-        // SPEED ESTIMATION FUNCTIONS
-        // ─────────────────────────────────────────────────────────────
-
-        function startCalibration() {
-          DRAW_STATE = { type: 'calibration', points: [] };
-          showToast('Click 2 points to draw calibration line');
-        }
-
-        async function saveCalibrationLine() {
-          if (!DRAW_STATE || DRAW_STATE.points.length !== 2) {
-            showToast('Need exactly 2 points');
-            return;
-          }
-
-          const distance = prompt('Enter real-world distance in meters:', '20');
-          if (!distance || isNaN(parseFloat(distance))) {
-            showToast('Invalid distance');
-            DRAW_STATE = null;
-            render();
-            return;
-          }
-
+      // ANALYTICS MODE
+      if (MODE === 'analytics' && DRAW_STATE) {
+        DRAW_STATE.points.push([x, y]);
+        if (DRAW_STATE.points.length === 2) {
           await fetch('/api/analytics/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               video_id: VIDEO_ID,
-              name: 'Calibration Line',
-              line_type: 'calibration',
+              name: "New Line",
+              line_type: "count",
               points: DRAW_STATE.points,
-              meta_data: { distance_meters: parseFloat(distance) }
+              meta_data: { in: 0, out: 0 }
             })
           });
-
           DRAW_STATE = null;
           loadLines();
-          updateCalibrationInfo();
-          showToast(`Calibration set: ${distance}m`);
+          alert("Line saved!");
         }
+        return;
+      }
 
-        async function updateCalibrationInfo() {
-          if (!VIDEO_ID) return;
-          const res = await fetch(`/api/analytics/video/${VIDEO_ID}`);
-          const allLines = await res.json();
-          const calibLine = allLines.find(l => l.line_type === 'calibration');
+      // EDIT MODE
+      if (MODE === 'edit') {
+        // Check selection (prioritize smallest box)
+        const clicked = annotations
+          .filter(a => x >= a.x1 && x <= a.x2 && y >= a.y1 && y <= a.y2)
+          .sort((a, b) => ((a.x2 - a.x1) * (a.y2 - a.y1)) - ((b.x2 - b.x1) * (b.y2 - b.y1)))[0];
 
-          const info = document.getElementById('calibrationInfo');
-          if (calibLine && calibLine.meta_data) {
-            info.innerHTML = `<span style="color: #22c55e;">✓</span> ${calibLine.meta_data.distance_meters || 0}m calibration set`;
-          } else {
-            info.textContent = 'No calibration line. Draw one and enter distance.';
-          }
+        selectedAnnotation = clicked || null;
+        updateSelectionInfo();
+        render();
+
+        if (selectedAnnotation) {
+          dragStart = { x, y };
+          originalRect = { ...selectedAnnotation };
         }
+      }
+    });
 
-        async function calculateSpeeds() {
-          const btn = document.getElementById('calculateSpeedBtn');
-          btn.disabled = true;
-          btn.textContent = '⏳ Calculating...';
+    canvas.addEventListener("mousemove", (e) => {
+      if (!dragStart || !selectedAnnotation || MODE !== 'edit') return;
 
-          try {
-            const res = await fetch(`/api/analytics/speed/${VIDEO_ID}`, { method: 'POST' });
-            const data = await res.json();
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
 
-            if (res.ok) {
-              showToast(`Updated ${data.annotations_updated} annotations with speeds!`);
-              document.getElementById('statAvgSpeed').textContent = data.stats.avg || '--';
-              document.getElementById('statMaxSpeed').textContent = data.stats.max || '--';
-              // Reload current frame to show speeds
-              fetchAnnotations();
-            } else {
-              showToast(data.detail || 'Speed calculation failed');
-            }
-          } catch (err) {
-            showToast('Error: ' + err.message);
-          }
+      const dx = x - dragStart.x;
+      const dy = y - dragStart.y;
 
-          btn.disabled = false;
-          btn.textContent = '⚡ Calculate Speeds';
-        }
+      selectedAnnotation.x1 = originalRect.x1 + dx;
+      selectedAnnotation.y1 = originalRect.y1 + dy;
+      selectedAnnotation.x2 = originalRect.x2 + dx;
+      selectedAnnotation.y2 = originalRect.y2 + dy;
+      render();
+    });
 
-        async function loadSpeedStats() {
-          if (!VIDEO_ID) return;
-          try {
-            const res = await fetch(`/api/analytics/speed/${VIDEO_ID}`);
-            const stats = await res.json();
-            document.getElementById('statAvgSpeed').textContent = stats.avg || '--';
-            document.getElementById('statMaxSpeed').textContent = stats.max || '--';
-          } catch (e) { }
-        }
+    canvas.addEventListener("mouseup", async () => {
+      if (dragStart && selectedAnnotation) {
+        await updateAnnotation(selectedAnnotation);
+      }
+      dragStart = null;
+    });
 
-        function drawSpeedLabels() {
-          // Draw speed on each annotation that has it
-          annotations.forEach(ann => {
-            if (ann.extra_meta && ann.extra_meta.speed_kmh) {
-              const speed = ann.extra_meta.speed_kmh;
-              const x = ann.x2 - 5;
-              const y = ann.y1 + 15;
+    // Keyboard Shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (!selectedAnnotation) return;
 
-              // Background
-              ctx.fillStyle = 'rgba(0,0,0,0.7)';
-              ctx.fillRect(x - 40, y - 12, 45, 16);
+      // Classes 1-6
+      const CLASS_KEYS = { '1': 'car', '2': 'truck', '3': 'bus', '4': 'motorcycle', '5': 'bicycle', '6': 'person' };
+      if (CLASS_KEYS[e.key]) {
+        selectedAnnotation.class_label = CLASS_KEYS[e.key];
+        updateAnnotation(selectedAnnotation);
+        updateSelectionInfo();
+        render();
+      }
 
-              // Speed text
-              ctx.fillStyle = speed > 80 ? '#ef4444' : speed > 50 ? '#f97316' : '#22c55e';
-              ctx.font = 'bold 11px Inter';
-              ctx.fillText(`${speed} km/h`, x - 38, y);
-            }
-          });
-        }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        deleteAnnotation(selectedAnnotation);
+      }
+    });
 
-        // Calibration button handlers
-        document.getElementById('addCalibrationBtn')?.addEventListener('click', startCalibration);
-        document.getElementById('calculateSpeedBtn')?.addEventListener('click', calculateSpeeds);
+    function showToast(msg, type = "success") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = `toast ${type} show`;
+      setTimeout(() => t.classList.remove("show"), 3000);
+    }
 
-        // Extend canvas click for calibration line
-        canvas.addEventListener('click', (e) => {
-          if (DRAW_STATE && DRAW_STATE.type === 'calibration') {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            DRAW_STATE.points.push([x, y]);
+    function setMode(m) {
+      MODE = m;
+      document.getElementById("modeEdit").className = `mode-btn ${m === 'edit' ? 'active' : ''}`;
+      document.getElementById("modeAnalytics").className = `mode-btn ${m === 'analytics' ? 'active' : ''}`;
 
-            if (DRAW_STATE.points.length === 2) {
-              saveCalibrationLine();
-            } else {
-              render();
-            }
-          }
+      document.getElementById("editPanel").style.display = m === 'edit' ? 'block' : 'none';
+      document.getElementById("analyticsPanel").style.display = m === 'analytics' ? 'block' : 'none';
+
+      document.getElementById("annotationLegend").style.display = m === 'edit' ? 'flex' : 'none';
+      document.getElementById("analyticsLegend").style.display = m === 'analytics' ? 'flex' : 'none';
+      render();
+    }
+
+    function updateLinesList() {
+      const container = document.getElementById("linesList");
+      container.innerHTML = '';
+      if (lines.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No counting lines</div>';
+        return;
+      }
+
+      lines.forEach(l => {
+        const div = document.createElement("div");
+        div.className = "info-row";
+        div.innerHTML = `
+                <span class="info-label">${l.name}</span>
+                <span class="info-value" style="font-size: 11px;">In: ${l.meta_data?.in || 0} Out: ${l.meta_data?.out || 0}</span>
+                <button class="btn btn-danger" style="padding: 2px 6px; font-size: 10px;" onclick="deleteLine(${l.id})">X</button>
+            `;
+        container.appendChild(div);
+
+        // Update stats
+        document.getElementById("statIn").textContent = l.meta_data?.in || 0;
+        document.getElementById("statOut").textContent = l.meta_data?.out || 0;
+      });
+    }
+
+    window.deleteLine = async (id) => {
+      if (confirm("Delete line?")) {
+        await fetch(`/api/analytics/${id}`, { method: 'DELETE' });
+        loadLines();
+      }
+    };
+
+    // VIDEO UPLOAD HANDLER
+    document.getElementById('videoFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const uploadBtn = document.getElementById('uploadBtn');
+      uploadBtn.innerHTML = '<span class="btn-icon">⏳</span> Uploading...';
+      uploadBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/videos/upload', {
+          method: 'POST',
+          body: formData
         });
 
-        // Extend render for calibration line preview
-        const origExtendedRender = extendedRender;
-        extendedRender = function () {
-          origExtendedRender();
+        if (res.ok) {
+          const video = await res.json();
+          // Add to dropdown and select it
+          const opt = document.createElement("option");
+          opt.value = video.id;
+          opt.textContent = video.original_filename;
+          document.getElementById("videoSelect").appendChild(opt);
+          document.getElementById("videoSelect").value = video.id;
+          VIDEO_ID = video.id;
 
-          // Draw calibration line in progress
-          if (DRAW_STATE && DRAW_STATE.type === 'calibration' && DRAW_STATE.points.length > 0) {
+          alert(`Video uploaded successfully! ID: ${video.id}\nNow click "Start Auto-Label" to process it.`);
+          loadFrame(0);
+        } else {
+          const err = await res.json();
+          alert(`Upload failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (err) {
+        alert(`Upload error: ${err.message}`);
+      } finally {
+        uploadBtn.innerHTML = '<span class="btn-icon">📤</span> Upload Video';
+        uploadBtn.disabled = false;
+        e.target.value = ''; // Reset file input
+      }
+    });
+
+    // AUTO-LABEL HANDLER
+    document.getElementById('autolabelBtn').addEventListener('click', async () => {
+      if (!VIDEO_ID) {
+        alert('Please select or upload a video first.');
+        return;
+      }
+
+      const btn = document.getElementById('autolabelBtn');
+      btn.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
+      btn.disabled = true;
+
+      try {
+        const frameStride = parseInt(document.getElementById('frameStrideSelect').value) || 3;
+        const res = await fetch('/api/autolabel/video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_id: VIDEO_ID, frame_stride: frameStride })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          alert(`Auto-labeling started! Job ID: ${data.job_id}\n\nThis may take a few minutes. Refresh the page to see progress.`);
+
+          // Poll for status
+          pollAutolabelStatus(data.job_id);
+        } else {
+          const err = await res.json();
+          alert(`Failed to start auto-label: ${err.detail || 'Unknown error'}`);
+          btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        alert(`Error: ${err.message}`);
+        btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+        btn.disabled = false;
+      }
+    });
+
+    async function pollAutolabelStatus(jobId) {
+      const btn = document.getElementById('autolabelBtn');
+
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/autolabel/jobs/${jobId}`);
+          const data = await res.json();
+
+          // Progress is 0.0 to 1.0, convert to percentage
+          const progress = Math.round((data.progress || 0) * 100);
+
+          if (data.status === 'running' || data.status === 'queued') {
+            btn.innerHTML = `<span class="btn-icon">⏳</span> ${progress}%`;
+            setTimeout(poll, 2000);
+          } else if (data.status === 'completed') {
+            btn.innerHTML = '<span class="btn-icon">✅</span> Done!';
+            alert('Auto-labeling complete! Loading annotations...');
+            loadFrame(0);
+            setTimeout(() => {
+              btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+              btn.disabled = false;
+            }, 2000);
+          } else if (data.status === 'failed') {
+            btn.innerHTML = '<span class="btn-icon">❌</span> Failed';
+            alert(`Auto-label failed: ${data.error_message || 'Unknown error'}`);
+            setTimeout(() => {
+              btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+              btn.disabled = false;
+            }, 2000);
+          }
+        } catch (err) {
+          btn.innerHTML = '<span class="btn-icon">🤖</span> Start Auto-Label';
+          btn.disabled = false;
+        }
+      };
+
+      poll();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // LANE ZONE FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    async function loadLaneZones() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/lanes/video/${VIDEO_ID}`);
+      laneZones = await res.json();
+      updateLaneZonesList();
+      render();
+    }
+
+    async function loadLaneEvents() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/lanes/events/${VIDEO_ID}`);
+      laneEvents = await res.json();
+      updateLaneEventsList();
+      updateLaneStats();
+    }
+
+    function updateLaneZonesList() {
+      const container = document.getElementById('laneZonesList');
+      if (!laneZones.length) {
+        container.innerHTML = '<div style="text-align: center; padding: 10px; color: var(--text-muted); font-size: 12px;">No zones defined</div>';
+        return;
+      }
+      container.innerHTML = laneZones.map(z => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; border-left: 3px solid ${z.color};">
+          <span style="font-size: 12px;">${z.name}</span>
+          <button onclick="deleteLaneZone(${z.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function updateLaneEventsList() {
+      const container = document.getElementById('laneEventsList');
+      if (!laneEvents.length) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Run analysis to detect events</div>';
+        return;
+      }
+      container.innerHTML = laneEvents.map(e => `
+        <div onclick="jumpToFrame(${e.frame_index})" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; cursor: pointer; border-left: 3px solid ${e.event_type === 'cut_in' ? '#f97316' : '#06b6d4'};">
+          <span style="font-size: 12px;">${e.event_type === 'cut_in' ? '🚗➡️' : '🚗⬅️'} Track ${e.track_id}</span>
+          <span style="font-size: 11px; color: var(--text-muted);">F${e.frame_index}</span>
+        </div>
+      `).join('');
+    }
+
+    function updateLaneStats() {
+      const cutIns = laneEvents.filter(e => e.event_type === 'cut_in').length;
+      const cutOuts = laneEvents.filter(e => e.event_type === 'cut_out').length;
+      document.getElementById('statCutIn').textContent = cutIns;
+      document.getElementById('statCutOut').textContent = cutOuts;
+    }
+
+    function jumpToFrame(frameIdx) {
+      loadFrame(frameIdx);
+    }
+
+    async function deleteLaneZone(zoneId) {
+      await fetch(`/api/lanes/${zoneId}`, { method: 'DELETE' });
+      loadLaneZones();
+      showToast('Lane zone deleted');
+    }
+
+    function startDrawingLane(zoneType) {
+      const names = { 'ego': 'Ego Lane', 'adjacent_left': 'Left Lane', 'adjacent_right': 'Right Lane' };
+      DRAW_STATE = { type: 'lane', zone_type: zoneType, name: names[zoneType], points: [], color: ZONE_COLORS[zoneType] };
+      showToast(`Click to draw ${names[zoneType]} polygon. Double-click to finish.`);
+    }
+
+    async function saveLaneZone() {
+      if (!DRAW_STATE || DRAW_STATE.type !== 'lane' || DRAW_STATE.points.length < 3) {
+        showToast('Need at least 3 points');
+        return;
+      }
+      await fetch('/api/lanes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_id: VIDEO_ID,
+          name: DRAW_STATE.name,
+          zone_type: DRAW_STATE.zone_type,
+          points: DRAW_STATE.points,
+          color: DRAW_STATE.color
+        })
+      });
+      DRAW_STATE = null;
+      loadLaneZones();
+      showToast('Lane zone saved!');
+    }
+
+    async function clearAllZones() {
+      if (!confirm('Delete all lane zones for this video?')) return;
+      await fetch(`/api/lanes/video/${VIDEO_ID}`, { method: 'DELETE' });
+      laneZones = [];
+      laneEvents = [];
+      updateLaneZonesList();
+      updateLaneEventsList();
+      updateLaneStats();
+      render();
+      showToast('All zones cleared');
+    }
+
+    async function analyzeLanes() {
+      const btn = document.getElementById('analyzeLanesBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Analyzing...';
+      try {
+        const res = await fetch(`/api/lanes/analyze/${VIDEO_ID}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Found ${data.events_detected} lane events!`);
+          loadLaneEvents();
+        } else {
+          showToast(data.detail || 'Analysis failed');
+        }
+      } catch (err) {
+        showToast('Analysis error: ' + err.message);
+      }
+      btn.disabled = false;
+      btn.textContent = '▶️ Analyze';
+    }
+
+    // Lane button handlers
+    document.getElementById('drawEgoLaneBtn')?.addEventListener('click', () => startDrawingLane('ego'));
+    document.getElementById('drawLeftLaneBtn')?.addEventListener('click', () => startDrawingLane('adjacent_left'));
+    document.getElementById('drawRightLaneBtn')?.addEventListener('click', () => startDrawingLane('adjacent_right'));
+    document.getElementById('clearZonesBtn')?.addEventListener('click', clearAllZones);
+    document.getElementById('analyzeLanesBtn')?.addEventListener('click', analyzeLanes);
+
+    // Lanes mode switch handler
+    document.getElementById('modeLanes')?.addEventListener('click', () => {
+      MODE = 'lanes';
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('modeLanes').classList.add('active');
+      document.getElementById('editPanel').style.display = 'none';
+      document.getElementById('analyticsPanel').style.display = 'none';
+      document.getElementById('lanesPanel').style.display = 'block';
+      loadLaneZones();
+      loadLaneEvents();
+    });
+
+    // Extend canvas click for lane drawing
+    const originalCanvasClick = canvas.onclick;
+    canvas.addEventListener('click', (e) => {
+      if (MODE === 'lanes' && DRAW_STATE && DRAW_STATE.type === 'lane') {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        DRAW_STATE.points.push([x, y]);
+        render();
+      }
+    });
+
+    canvas.addEventListener('dblclick', (e) => {
+      if (MODE === 'lanes' && DRAW_STATE && DRAW_STATE.type === 'lane') {
+        e.preventDefault();
+        saveLaneZone();
+      }
+    });
+
+    // Extend render to draw lane zones
+    function drawLanes() {
+      // Draw lane zones (semi-transparent polygons)
+      if (MODE === 'lanes' || laneZones.length > 0) {
+        laneZones.forEach(zone => {
+          if (zone.points && zone.points.length >= 3) {
             ctx.beginPath();
-            ctx.moveTo(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1]);
-            if (DRAW_STATE.points.length === 1) {
-              ctx.arc(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1], 6, 0, Math.PI * 2);
-            }
-            ctx.strokeStyle = '#f59e0b';
-            ctx.lineWidth = 3;
-            ctx.setLineDash([8, 4]);
+            ctx.moveTo(zone.points[0][0], zone.points[0][1]);
+            zone.points.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+            ctx.closePath();
+            ctx.fillStyle = zone.color + '30';
+            ctx.fill();
+            ctx.strokeStyle = zone.color;
+            ctx.lineWidth = 2;
             ctx.stroke();
-            ctx.setLineDash([]);
           }
-        };
-
-        // Load calibration info on mode switch
-        document.getElementById('modeAnalytics')?.addEventListener('click', () => {
-          updateCalibrationInfo();
-          loadSpeedStats();
         });
+      }
 
-        // Patch render function to include speed labels and safety visuals
-        const render_base = render;
-        render = function () {
-          render_base();
-          // extendedRender is already called by base render if patched, or we ensure it
-          if (typeof drawSpeedLabels === 'function') drawSpeedLabels();
-          if (typeof drawSafetyVisuals === 'function') drawSafetyVisuals();
-        };
+      // Draw in-progress lane polygon
+      if (DRAW_STATE && DRAW_STATE.type === 'lane' && DRAW_STATE.points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1]);
+        DRAW_STATE.points.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.strokeStyle = DRAW_STATE.color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-        // ─────────────────────────────────────────────────────────────
-        // SAFETY & NEAR-MISS FUNCTIONS
-        // ─────────────────────────────────────────────────────────────
+        // Draw points
+        DRAW_STATE.points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
+          ctx.fillStyle = DRAW_STATE.color;
+          ctx.fill();
+        });
+      }
 
-        async function analyzeSafety() {
-          const btn = document.getElementById('analyzeSafetyBtn');
-          btn.disabled = true;
-          btn.textContent = '⏳ Scanning...';
-          try {
-            const res = await fetch(`/api/safety/analyze/${VIDEO_ID}`, { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-              showToast(`Scan complete. Found ${data.events_detected} events (${data.critical_events} critical).`);
-              loadSafetyEvents();
-            } else {
-              showToast(data.detail || 'Analysis failed');
-            }
-          } catch (err) {
-            showToast('Safety analysis error: ' + err.message);
+      // Highlight vehicles with events on current frame
+      if (laneEvents.length > 0) {
+        const frameEvents = laneEvents.filter(e => e.frame_index === currentFrame);
+        frameEvents.forEach(evt => {
+          if (evt.bbox) {
+            ctx.strokeStyle = evt.event_type === 'cut_in' ? '#f97316' : '#06b6d4';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(evt.bbox[0], evt.bbox[1], evt.bbox[2] - evt.bbox[0], evt.bbox[3] - evt.bbox[1]);
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText(evt.event_type.toUpperCase().replace('_', '-'), evt.bbox[0], evt.bbox[1] - 5);
           }
-          btn.disabled = false;
-          btn.textContent = '⚠️ Scan Video';
-        }
+        });
+      }
+    }
 
-        async function loadSafetyEvents() {
-          if (!VIDEO_ID) return;
-          const res = await fetch(`/api/safety/events/${VIDEO_ID}`);
-          safetyEvents = await res.json();
-          updateSafetyEventsList();
-          updateSafetyStats();
-        }
 
-        async function clearSafetyEvents() {
-          if (!confirm('Clear all safety events?')) return;
-          await fetch(`/api/safety/events/${VIDEO_ID}`, { method: 'DELETE' });
-          safetyEvents = [];
-          updateSafetyEventsList();
-          updateSafetyStats();
-          showToast('Safety events cleared');
-        }
 
-        function updateSafetyEventsList() {
-          const container = document.getElementById('safetyEventsList');
-          if (!safetyEvents.length) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Scan to detect near-misses</div>';
-            return;
-          }
-          container.innerHTML = safetyEvents.map(e => `
+    // ─────────────────────────────────────────────────────────────
+    // SPEED ESTIMATION FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    function startCalibration() {
+      DRAW_STATE = { type: 'calibration', points: [] };
+      showToast('Click 2 points to draw calibration line');
+    }
+
+    async function saveCalibrationLine() {
+      if (!DRAW_STATE || DRAW_STATE.points.length !== 2) {
+        showToast('Need exactly 2 points');
+        return;
+      }
+
+      const distance = prompt('Enter real-world distance in meters:', '20');
+      if (!distance || isNaN(parseFloat(distance))) {
+        showToast('Invalid distance');
+        DRAW_STATE = null;
+        render();
+        return;
+      }
+
+      await fetch('/api/analytics/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_id: VIDEO_ID,
+          name: 'Calibration Line',
+          line_type: 'calibration',
+          points: DRAW_STATE.points,
+          meta_data: { distance_meters: parseFloat(distance) }
+        })
+      });
+
+      DRAW_STATE = null;
+      loadLines();
+      updateCalibrationInfo();
+      showToast(`Calibration set: ${distance}m`);
+    }
+
+    async function updateCalibrationInfo() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/analytics/video/${VIDEO_ID}`);
+      const allLines = await res.json();
+      const calibLine = allLines.find(l => l.line_type === 'calibration');
+
+      const info = document.getElementById('calibrationInfo');
+      if (calibLine && calibLine.meta_data) {
+        info.innerHTML = `<span style="color: #22c55e;">✓</span> ${calibLine.meta_data.distance_meters || 0}m calibration set`;
+      } else {
+        info.textContent = 'No calibration line. Draw one and enter distance.';
+      }
+    }
+
+    async function calculateSpeeds() {
+      const btn = document.getElementById('calculateSpeedBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Calculating...';
+
+      try {
+        const res = await fetch(`/api/analytics/speed/${VIDEO_ID}`, { method: 'POST' });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(`Updated ${data.annotations_updated} annotations with speeds!`);
+          document.getElementById('statAvgSpeed').textContent = data.stats.avg || '--';
+          document.getElementById('statMaxSpeed').textContent = data.stats.max || '--';
+          // Reload current frame to show speeds
+          fetchAnnotations();
+        } else {
+          showToast(data.detail || 'Speed calculation failed');
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = '⚡ Calculate Speeds';
+    }
+
+    async function loadSpeedStats() {
+      if (!VIDEO_ID) return;
+      try {
+        const res = await fetch(`/api/analytics/speed/${VIDEO_ID}`);
+        const stats = await res.json();
+        document.getElementById('statAvgSpeed').textContent = stats.avg || '--';
+        document.getElementById('statMaxSpeed').textContent = stats.max || '--';
+      } catch (e) { }
+    }
+
+    function drawSpeedLabels() {
+      // Draw speed on each annotation that has it
+      annotations.forEach(ann => {
+        if (ann.extra_meta && ann.extra_meta.speed_kmh) {
+          const speed = ann.extra_meta.speed_kmh;
+          const x = ann.x2 - 5;
+          const y = ann.y1 + 15;
+
+          // Background
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(x - 40, y - 12, 45, 16);
+
+          // Speed text
+          ctx.fillStyle = speed > 80 ? '#ef4444' : speed > 50 ? '#f97316' : '#22c55e';
+          ctx.font = 'bold 11px Inter';
+          ctx.fillText(`${speed} km/h`, x - 38, y);
+        }
+      });
+    }
+
+    // Calibration button handlers
+    document.getElementById('addCalibrationBtn')?.addEventListener('click', startCalibration);
+    document.getElementById('calculateSpeedBtn')?.addEventListener('click', calculateSpeeds);
+
+    // Extend canvas click for calibration line
+    canvas.addEventListener('click', (e) => {
+      if (DRAW_STATE && DRAW_STATE.type === 'calibration') {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        DRAW_STATE.points.push([x, y]);
+
+        if (DRAW_STATE.points.length === 2) {
+          saveCalibrationLine();
+        } else {
+          render();
+        }
+      }
+    });
+
+    // Extend render for calibration line preview
+    // Extend render for calibration line preview
+    function drawCalibrationPreview() {
+      // Draw calibration line in progress
+      if (DRAW_STATE && DRAW_STATE.type === 'calibration' && DRAW_STATE.points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1]);
+        if (DRAW_STATE.points.length === 1) {
+          ctx.arc(DRAW_STATE.points[0][0], DRAW_STATE.points[0][1], 6, 0, Math.PI * 2);
+        }
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Load calibration info on mode switch
+    document.getElementById('modeAnalytics')?.addEventListener('click', () => {
+      updateCalibrationInfo();
+      loadSpeedStats();
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // SAFETY & NEAR-MISS FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    async function analyzeSafety() {
+      const btn = document.getElementById('analyzeSafetyBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Scanning...';
+      try {
+        const res = await fetch(`/api/safety/analyze/${VIDEO_ID}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Scan complete. Found ${data.events_detected} events (${data.critical_events} critical).`);
+          loadSafetyEvents();
+        } else {
+          showToast(data.detail || 'Analysis failed');
+        }
+      } catch (err) {
+        showToast('Safety analysis error: ' + err.message);
+      }
+      btn.disabled = false;
+      btn.textContent = '⚠️ Scan Video';
+    }
+
+    async function loadSafetyEvents() {
+      if (!VIDEO_ID) return;
+      const res = await fetch(`/api/safety/events/${VIDEO_ID}`);
+      safetyEvents = await res.json();
+      updateSafetyEventsList();
+      updateSafetyStats();
+    }
+
+    async function clearSafetyEvents() {
+      if (!confirm('Clear all safety events?')) return;
+      await fetch(`/api/safety/events/${VIDEO_ID}`, { method: 'DELETE' });
+      safetyEvents = [];
+      updateSafetyEventsList();
+      updateSafetyStats();
+      showToast('Safety events cleared');
+    }
+
+    function updateSafetyEventsList() {
+      const container = document.getElementById('safetyEventsList');
+      if (!safetyEvents.length) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Scan to detect near-misses</div>';
+        return;
+      }
+      container.innerHTML = safetyEvents.map(e => `
         <div onclick="jumpToFrame(${e.frame_index})" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; cursor: pointer; border-left: 3px solid ${e.severity === 'critical' ? '#ef4444' : '#f59e0b'};">
           <div>
             <span style="font-size: 12px; font-weight: bold; color: ${e.severity === 'critical' ? '#ef4444' : '#f59e0b'};">TTC: ${e.ttc.toFixed(2)}s</span>
@@ -1348,80 +1488,80 @@
           <span style="font-size: 11px; color: var(--text-muted);">F${e.frame_index}</span>
         </div>
       `).join('');
-        }
+    }
 
-        function updateSafetyStats() {
-          const critical = safetyEvents.filter(e => e.severity === 'critical').length;
-          const warning = safetyEvents.filter(e => e.severity === 'warning').length;
-          document.getElementById('statCritical').textContent = critical;
-          document.getElementById('statWarning').textContent = warning;
-        }
+    function updateSafetyStats() {
+      const critical = safetyEvents.filter(e => e.severity === 'critical').length;
+      const warning = safetyEvents.filter(e => e.severity === 'warning').length;
+      document.getElementById('statCritical').textContent = critical;
+      document.getElementById('statWarning').textContent = warning;
+    }
 
-        function drawSafetyVisuals() {
-          // Draw lines between vehicles involved in near-miss on current frame
-          if (typeof safetyEvents !== 'undefined' && safetyEvents.length > 0) {
-            const frameEvents = safetyEvents.filter(e => e.frame_index === currentFrame);
+    function drawSafetyVisuals() {
+      // Draw lines between vehicles involved in near-miss on current frame
+      if (typeof safetyEvents !== 'undefined' && safetyEvents.length > 0) {
+        const frameEvents = safetyEvents.filter(e => e.frame_index === currentFrame);
 
-            frameEvents.forEach(evt => {
-              // Find the two annotations
-              const box1 = annotations.find(a => a.track_id === evt.track_id_1);
-              const box2 = annotations.find(a => a.track_id === evt.track_id_2);
+        frameEvents.forEach(evt => {
+          // Find the two annotations
+          const box1 = annotations.find(a => a.track_id === evt.track_id_1);
+          const box2 = annotations.find(a => a.track_id === evt.track_id_2);
 
-              if (box1 && box2) {
-                const c1 = { x: (box1.x1 + box1.x2) / 2, y: (box1.y1 + box1.y2) / 2 };
-                const c2 = { x: (box2.x1 + box2.x2) / 2, y: (box2.y1 + box2.y2) / 2 };
+          if (box1 && box2) {
+            const c1 = { x: (box1.x1 + box1.x2) / 2, y: (box1.y1 + box1.y2) / 2 };
+            const c2 = { x: (box2.x1 + box2.x2) / 2, y: (box2.y1 + box2.y2) / 2 };
 
-                // Draw connecting line
-                ctx.beginPath();
-                ctx.moveTo(c1.x, c1.y);
-                ctx.lineTo(c2.x, c2.y);
-                ctx.lineWidth = evt.severity === 'critical' ? 3 : 2;
-                ctx.strokeStyle = evt.severity === 'critical' ? '#ef4444' : '#f59e0b';
-                ctx.setLineDash([5, 5]);
-                ctx.stroke();
-                ctx.setLineDash([]);
+            // Draw connecting line
+            ctx.beginPath();
+            ctx.moveTo(c1.x, c1.y);
+            ctx.lineTo(c2.x, c2.y);
+            ctx.lineWidth = evt.severity === 'critical' ? 3 : 2;
+            ctx.strokeStyle = evt.severity === 'critical' ? '#ef4444' : '#f59e0b';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
 
-                // Draw warning icon in middle
-                const midX = (c1.x + c2.x) / 2;
-                const midY = (c1.y + c2.y) / 2;
-                ctx.fillStyle = evt.severity === 'critical' ? '#ef4444' : '#f59e0b';
-                ctx.font = '20px Arial';
-                ctx.fillText('⚠️', midX - 10, midY + 5);
+            // Draw warning icon in middle
+            const midX = (c1.x + c2.x) / 2;
+            const midY = (c1.y + c2.y) / 2;
+            ctx.fillStyle = evt.severity === 'critical' ? '#ef4444' : '#f59e0b';
+            ctx.font = '20px Arial';
+            ctx.fillText('⚠️', midX - 10, midY + 5);
 
-                // Highlight boxes
-                [box1, box2].forEach(b => {
-                  ctx.strokeStyle = evt.severity === 'critical' ? '#ef4444' : '#f59e0b';
-                  ctx.lineWidth = 3;
-                  ctx.strokeRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1);
-                });
-              }
+            // Highlight boxes
+            [box1, box2].forEach(b => {
+              ctx.strokeStyle = evt.severity === 'critical' ? '#ef4444' : '#f59e0b';
+              ctx.lineWidth = 3;
+              ctx.strokeRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1);
             });
           }
-        }
-
-        // Safety listeners
-        document.getElementById('analyzeSafetyBtn')?.addEventListener('click', analyzeSafety);
-        document.getElementById('clearSafetyBtn')?.addEventListener('click', clearSafetyEvents);
-
-        // Safety mode switch
-        document.getElementById('modeSafety')?.addEventListener('click', () => {
-          MODE = 'safety';
-          document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-          document.getElementById('modeSafety').classList.add('active');
-
-          // Hide others
-          document.getElementById('editPanel').style.display = 'none';
-          document.getElementById('analyticsPanel').style.display = 'none';
-          document.getElementById('lanesPanel').style.display = 'none';
-
-          // Show safety
-          document.getElementById('safetyPanel').style.display = 'block';
-
-          loadSafetyEvents();
         });
+      }
+    }
 
-        init();
-      </script>
+    // Safety listeners
+    document.getElementById('analyzeSafetyBtn')?.addEventListener('click', analyzeSafety);
+    document.getElementById('clearSafetyBtn')?.addEventListener('click', clearSafetyEvents);
+
+    // Safety mode switch
+    document.getElementById('modeSafety')?.addEventListener('click', () => {
+      MODE = 'safety';
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('modeSafety').classList.add('active');
+
+      // Hide others
+      document.getElementById('editPanel').style.display = 'none';
+      document.getElementById('analyticsPanel').style.display = 'none';
+      document.getElementById('lanesPanel').style.display = 'none';
+
+      // Show safety
+      document.getElementById('safetyPanel').style.display = 'block';
+
+      loadSafetyEvents();
+    });
+
+    init();
+  </script>
 </body>
 
 </html>
