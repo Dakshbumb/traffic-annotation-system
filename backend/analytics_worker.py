@@ -1,10 +1,13 @@
 import time
+import logging
 import math
 import numpy as np
 from sqlalchemy.orm import Session
 from database import SessionLocal
 import models
 import crud
+
+logger = logging.getLogger("analytics_worker")
 
 # Do a simple line-segment intersection check
 # Line 1: p1 -> p2
@@ -25,7 +28,7 @@ def run_analytics(video_id: int):
     try:
         # Get all annotations for this video, sorted by track_id then frame
         # We need full track history to detect crossings/movement
-        print(f"[analytics] Loading tracks for video {video_id}...")
+        logger.info(f"Loading tracks for video {video_id}...")
         all_anns = db.query(models.Annotation).filter(
             models.Annotation.video_id == video_id,
             models.Annotation.track_id.isnot(None)
@@ -39,7 +42,7 @@ def run_analytics(video_id: int):
                 tracks[tid] = []
             tracks[tid].append(ann)
             
-        print(f"[analytics] Processed {len(tracks)} unique tracks")
+        logger.info(f"Processed {len(tracks)} unique tracks")
 
         # Get Analytics Lines
         lines = db.query(models.AnalyticsLine).filter(
@@ -47,7 +50,7 @@ def run_analytics(video_id: int):
         ).all()
         
         if not lines:
-            print("[analytics] No analytics lines defined. Skipping.")
+            logger.info("No analytics lines defined. Skipping.")
             return
 
         # Prepare counters
@@ -86,16 +89,19 @@ def run_analytics(video_id: int):
         for line in lines:
             if line.line_type == "count":
                 line.meta_data = line_counts[line.id]
-                print(f"[analytics] Line '{line.name}': In={line_counts[line.id]['in']}, Out={line_counts[line.id]['out']}")
+                logger.info(f"Line '{line.name}': In={line_counts[line.id]['in']}, Out={line_counts[line.id]['out']}")
         
         db.commit()
-        print("[analytics] Finished processing")
+        logger.info("Finished processing")
         
     except Exception as e:
-        print(f"[analytics] Error: {e}")
+        logger.error(f"Error: {e}")
     finally:
         db.close()
 
 if __name__ == "__main__":
-    # Test run on video 19
-    run_analytics(19)
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python analytics_worker.py <video_id>")
+        sys.exit(1)
+    run_analytics(int(sys.argv[1]))

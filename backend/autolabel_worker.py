@@ -10,12 +10,9 @@ import os
 import time
 import threading
 import logging
+import traceback
 from datetime import datetime
 from typing import Optional
-
-# GPU mode enabled - will use CUDA if available
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Commented out to enable GPU
-# os.environ["TORCH_CUDA_AVAILABLE"] = "0"
 
 import cv2
 from ultralytics import YOLO
@@ -375,7 +372,6 @@ def _run_job(job_id: str):
             "updated_at": datetime.utcnow().isoformat(),
         })
         logger.error(f"Job {job_id} FAILED: {e}")
-        import traceback
         traceback.print_exc()
 
     finally:

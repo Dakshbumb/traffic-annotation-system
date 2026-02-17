@@ -32,8 +32,7 @@ class Annotation(Base):
     y1 = Column(Float)
     x2 = Column(Float)
     y2 = Column(Float)
-    extra_meta = Column(JSON, nullable=True)                  # stored as real JSON/dict
-# JSON string (speed, violations, etc.)
+    extra_meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     video = relationship("Video", back_populates="annotations")

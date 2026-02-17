@@ -1,6 +1,10 @@
+import logging
+
 from dotenv import load_dotenv
 from pathlib import Path
 import os
+
+logger = logging.getLogger("config")
 
 # ---------- Load .env ----------
 load_dotenv()
@@ -21,8 +25,7 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 
 # ---------- PERFORMANCE / ML CONFIG ----------
 
-# YOLO model to use (yolov8m = medium, better accuracy for dashcam footage)
-YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolov8m.pt")
+# YOLO model name is defined below in the ML settings section
 
 # ---------- Compute device (Auto-detect GPU with compatibility check) ----------
 import torch
@@ -41,12 +44,12 @@ def get_device():
             _ = test_tensor + 1
         return "cuda"
     except Exception as e:
-        print(f"[config] CUDA test failed, falling back to CPU: {e}")
+        logger.warning(f"CUDA test failed, falling back to CPU: {e}")
         return "cpu"
 
 DEVICE = get_device()
 USE_FP16 = DEVICE == "cuda"  # Use half precision on GPU for speedup
-print(f"[config] Using device: {DEVICE}")
+logger.info(f"Using device: {DEVICE}")
 
 
 # Exports folder -> backend/exports

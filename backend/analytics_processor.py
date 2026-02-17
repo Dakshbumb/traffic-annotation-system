@@ -1,8 +1,11 @@
+import logging
 from sqlalchemy.orm import Session
 from collections import defaultdict
 import models
 import schemas
 from analytics_utils import do_intersect
+
+logger = logging.getLogger("analytics_processor")
 
 def process_video_analytics(db: Session, video_id: int):
     """
@@ -11,7 +14,7 @@ def process_video_analytics(db: Session, video_id: int):
     # 1. Fetch all analytics lines
     lines = db.query(models.AnalyticsLine).filter(models.AnalyticsLine.video_id == video_id).all()
     if not lines:
-        print(f"[Analytics] No lines found for video {video_id}")
+        logger.info(f"No lines found for video {video_id}")
         return
 
     # Reset counts
@@ -25,7 +28,7 @@ def process_video_analytics(db: Session, video_id: int):
     ).order_by(models.Annotation.frame_index).all()
 
     if not annotations:
-        print(f"[Analytics] No annotations found for video {video_id}")
+        logger.info(f"No annotations found for video {video_id}")
         return
 
     # 3. Group by track_id to build trajectories
@@ -100,5 +103,5 @@ def process_video_analytics(db: Session, video_id: int):
         # But assigning a new dict works.
     
     db.commit()
-    print(f"[Analytics] Processed video {video_id}. Counts: {line_counts}")
+    logger.info(f"Processed video {video_id}. Counts: {line_counts}")
 
