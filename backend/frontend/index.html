@@ -340,6 +340,68 @@
       color: var(--text-primary);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }
+
+    /* Export Dropdown */
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .export-dropdown-content {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 6px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      min-width: 220px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .export-dropdown-content.show {
+      display: block;
+    }
+
+    .export-dropdown-header {
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .export-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .export-dropdown-item:hover {
+      background: rgba(99, 102, 241, 0.15);
+    }
+
+    .export-dropdown-item .export-icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+
+    .export-dropdown-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 4px 0;
+    }
   </style>
 </head>
 
@@ -382,7 +444,42 @@
     </div>
 
     <div class="toolbar-divider"></div>
-    <button class="btn" id="saveBtn"><span class="btn-icon">�</span> Run Analytics</button>
+    <button class="btn" id="saveBtn"><span class="btn-icon">⚡</span> Run Analytics</button>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Export Dropdown -->
+    <div class="export-dropdown">
+      <button class="btn" id="exportBtn" onclick="toggleExportDropdown()">
+        <span class="btn-icon">📥</span> Export ▾
+      </button>
+      <div class="export-dropdown-content" id="exportDropdown">
+        <div class="export-dropdown-header">Annotation Formats</div>
+        <div class="export-dropdown-item" onclick="doExport('csv')">
+          <span class="export-icon">📄</span> CSV Spreadsheet
+        </div>
+        <div class="export-dropdown-item" onclick="doExport('coco')">
+          <span class="export-icon">🎯</span> COCO JSON
+        </div>
+        <div class="export-dropdown-item" onclick="doExport('yolo')">
+          <span class="export-icon">📦</span> YOLO TXT (ZIP)
+        </div>
+        <div class="export-dropdown-item" onclick="doExport('voc')">
+          <span class="export-icon">📁</span> Pascal VOC XML (ZIP)
+        </div>
+        <div class="export-dropdown-item" onclick="doExport('json')">
+          <span class="export-icon">📝</span> Custom JSON
+        </div>
+        <div class="export-dropdown-divider"></div>
+        <div class="export-dropdown-header">Media Output</div>
+        <div class="export-dropdown-item" onclick="doExport('video')">
+          <span class="export-icon">🎬</span> Annotated Video (MP4)
+        </div>
+        <div class="export-dropdown-item" onclick="doExport('frame')">
+          <span class="export-icon">🖼️</span> Current Frame (JPG)
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="main-container">
@@ -1559,6 +1656,99 @@
 
       loadSafetyEvents();
     });
+
+    // ─────────────────────────────────────────────────────────────
+    // EXPORT FUNCTIONS
+    // ─────────────────────────────────────────────────────────────
+
+    function toggleExportDropdown() {
+      const dd = document.getElementById('exportDropdown');
+      dd.classList.toggle('show');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.export-dropdown')) {
+        document.getElementById('exportDropdown')?.classList.remove('show');
+      }
+    });
+
+    function doExport(format) {
+      if (!VIDEO_ID) {
+        alert('Please select a video first.');
+        return;
+      }
+
+      document.getElementById('exportDropdown').classList.remove('show');
+
+      if (format === 'frame') {
+        // Export current annotated frame as image
+        exportAnnotatedFrame();
+        return;
+      }
+
+      if (format === 'video') {
+        // Show progress for video export
+        exportAnnotatedVideo();
+        return;
+      }
+
+      // Annotation format exports - direct download
+      const url = `/export/${format}/${VIDEO_ID}`;
+      showToast(`Downloading ${format.toUpperCase()} export...`);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function exportAnnotatedFrame() {
+      // Use canvas to export the currently rendered frame with annotations
+      const dataURL = canvas.toDataURL('image/jpeg', 0.95);
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = `annotated_frame_${currentFrame}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(`Frame ${currentFrame} exported as JPG!`);
+    }
+
+    async function exportAnnotatedVideo() {
+      showToast('Generating annotated video... This may take a minute.');
+
+      const btn = document.getElementById('exportBtn');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span class="btn-icon">⏳</span> Exporting...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`/export/annotated_video/${VIDEO_ID}`);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Export failed');
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `annotated_video_${VIDEO_ID}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Annotated video downloaded!');
+      } catch (err) {
+        alert('Video export error: ' + err.message);
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
 
     init();
   </script>

@@ -259,3 +259,96 @@ def export_yolo_mot(video_id: int, db: Session = Depends(get_db)):
         media_type="application/zip",
         filename=f"{folder_name}.zip",
     )
+
+
+# ------------------- Annotated Video (MP4 with bboxes) -------------------
+@router.get("/annotated_video/{video_id}")
+def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
+    """Export video with bounding boxes drawn on each frame."""
+    video = db.query(models.Video).filter(models.Video.id == video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    video_path = os.path.join(UPLOAD_DIR, video.filename)
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Video file not found on disk")
+
+    # Get all annotations grouped by frame
+    anns = db.query(models.Annotation).filter(
+        models.Annotation.video_id == video_id
+    ).order_by(models.Annotation.frame_index.asc()).all()
+
+    if not anns:
+        raise HTTPException(status_code=400, detail="No annotations found for this video")
+
+    # Group annotations by frame
+    from collections import defaultdict
+    frame_anns = defaultdict(list)
+    for a in anns:
+        frame_anns[a.frame_index].append(a)
+
+    # Class colors (BGR for OpenCV)
+    CLASS_COLORS_BGR = {
+        'car': (94, 197, 34),       # green
+        'truck': (22, 115, 249),    # orange
+        'bus': (8, 179, 234),       # yellow
+        'motorcycle': (212, 182, 6),# cyan
+        'bicycle': (239, 70, 217),  # magenta
+        'person': (68, 68, 239),    # red
+    }
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise HTTPException(status_code=500, detail="Cannot open video")
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    out_filename = f"annotated_video_{video_id}_{ts}.mp4"
+    out_path = os.path.join(EXPORT_DIR, out_filename)
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
+
+    frame_idx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Draw annotations for this frame
+        if frame_idx in frame_anns:
+            for ann in frame_anns[frame_idx]:
+                color = CLASS_COLORS_BGR.get(ann.class_label, (255, 255, 255))
+                x1, y1 = int(ann.x1), int(ann.y1)
+                x2, y2 = int(ann.x2), int(ann.y2)
+
+                # Draw box
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+                # Draw label background
+                label = f"{ann.class_label}"
+                if ann.track_id is not None:
+                    label += f" #{ann.track_id}"
+                if ann.extra_meta and ann.extra_meta.get('speed_kmh'):
+                    label += f" {ann.extra_meta['speed_kmh']}km/h"
+
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 6, y1), color, -1)
+                cv2.putText(frame, label, (x1 + 3, y1 - 4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+
+        writer.write(frame)
+        frame_idx += 1
+
+    cap.release()
+    writer.release()
+
+    return FileResponse(
+        path=out_path,
+        media_type="video/mp4",
+        filename=out_filename,
+    )
