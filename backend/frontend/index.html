@@ -737,24 +737,40 @@
       ctx.drawImage(frameImage, 0, 0);
 
       // Draw Annotations
+      const frameEventTrackIds = new Set();
+      if (laneEvents && laneEvents.length > 0) {
+        // Find all tracks that have cut-in/cut-out events near this frame
+        laneEvents.forEach(evt => {
+          // Mark vehicles as cut-in for a window of frames around the event
+          if (Math.abs(evt.frame_index - currentFrame) < 60) {
+            frameEventTrackIds.add(evt.track_id);
+          }
+        });
+      }
+
       annotations.forEach(ann => {
         const w = ann.x2 - ann.x1;
         const h = ann.y2 - ann.y1;
         const area = w * h;
         const canvasArea = canvas.width * canvas.height;
 
-        // Red for nearby/large vehicles (>15% of frame), green for others, cyan for traffic lights
+        // Check if this vehicle is a cut-in/cut-out vehicle
+        const isCutInVehicle = frameEventTrackIds.has(ann.track_id);
+
+        // Color: red for cut-in vehicles, cyan for traffic_light, green otherwise
         let color;
-        if (ann.class_label === 'traffic_light') {
+        if (isCutInVehicle) {
+          color = '#ef4444'; // Red for confirmed cut-in vehicles (PPT style)
+        } else if (ann.class_label === 'traffic_light') {
           color = '#06b6d4';
         } else if (area > canvasArea * 0.15) {
-          color = '#ef4444'; // Red for nearby vehicles
+          color = '#ef4444';
         } else {
-          color = '#22c55e'; // Green for normal
+          color = '#22c55e';
         }
 
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = isCutInVehicle ? 3 : 2;
 
         // Box
         ctx.strokeRect(ann.x1, ann.y1, w, h);
@@ -802,6 +818,7 @@
       if (typeof drawSpeedLabels === 'function') drawSpeedLabels();
       if (typeof drawSafetyVisuals === 'function') drawSafetyVisuals();
       if (typeof drawCalibrationPreview === 'function') drawCalibrationPreview();
+      if (typeof drawTrajectoryTrails === 'function') drawTrajectoryTrails();
     }
 
     // UI HANDLERS
@@ -1369,20 +1386,78 @@
         });
       }
 
-      // Highlight vehicles with events on current frame
+      // PPT-STYLE: Highlight vehicles with CUT-IN/CUT-OUT events on current frame
       if (laneEvents.length > 0) {
-        const frameEvents = laneEvents.filter(e => e.frame_index === currentFrame);
+        const frameEvents = laneEvents.filter(e => Math.abs(e.frame_index - currentFrame) < 30);
         frameEvents.forEach(evt => {
           if (evt.bbox) {
-            ctx.strokeStyle = evt.event_type === 'cut_in' ? '#f97316' : '#06b6d4';
+            const x1 = evt.bbox[0], y1 = evt.bbox[1];
+            const x2 = evt.bbox[2], y2 = evt.bbox[3];
+            const w = x2 - x1, h = y2 - y1;
+
+            // Red thick box (PPT style)
+            ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 4;
-            ctx.strokeRect(evt.bbox[0], evt.bbox[1], evt.bbox[2] - evt.bbox[0], evt.bbox[3] - evt.bbox[1]);
-            ctx.fillStyle = ctx.strokeStyle;
+            ctx.strokeRect(x1, y1, w, h);
+
+            // "V{track_id} CUT-IN" label (PPT style - red bg with white text)
+            const eventLabel = evt.event_type === 'cut_in'
+              ? `V${evt.track_id} CUT-IN`
+              : `V${evt.track_id} CUT-OUT`;
             ctx.font = 'bold 14px Inter';
-            ctx.fillText(evt.event_type.toUpperCase().replace('_', '-'), evt.bbox[0], evt.bbox[1] - 5);
+            const labelW = ctx.measureText(eventLabel).width + 10;
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(x1, y1 - 24, labelW, 22);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(eventLabel, x1 + 5, y1 - 7);
           }
         });
       }
+    }
+
+    // TRAJECTORY TRAIL DRAWING
+    function drawTrajectoryTrails() {
+      if (!annotations || annotations.length === 0) return;
+      // Build trajectory history: for each track_id, get bottom-center of bbox across nearby frames
+      // We use stored annotations to find positions in surrounding frames
+      const trackPositions = {};
+
+      // Collect positions from recent annotations (we may need to load more frames)
+      annotations.forEach(ann => {
+        if (!ann.track_id) return;
+        if (!trackPositions[ann.track_id]) {
+          trackPositions[ann.track_id] = [];
+        }
+        const cx = (ann.x1 + ann.x2) / 2;
+        const cy = ann.y2; // Bottom center
+        trackPositions[ann.track_id].push({ x: cx, y: cy });
+      });
+
+      // Check if any tracks have cut-in events
+      const cutInTrackIds = new Set();
+      if (laneEvents && laneEvents.length > 0) {
+        laneEvents.forEach(evt => {
+          if (evt.event_type === 'cut_in') cutInTrackIds.add(evt.track_id);
+        });
+      }
+
+      // Draw trajectory dots for each tracked vehicle
+      Object.entries(trackPositions).forEach(([trackId, positions]) => {
+        if (positions.length < 2) return;
+        const isCutIn = cutInTrackIds.has(parseInt(trackId));
+        const trailColor = isCutIn ? 'rgba(239, 68, 68, 0.6)' : 'rgba(34, 197, 94, 0.4)';
+
+        // Draw trail dots
+        positions.forEach((pos, i) => {
+          const alpha = (i + 1) / positions.length;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, isCutIn ? 4 : 3, 0, Math.PI * 2);
+          ctx.fillStyle = isCutIn
+            ? `rgba(239, 68, 68, ${alpha * 0.7})`
+            : `rgba(34, 197, 94, ${alpha * 0.5})`;
+          ctx.fill();
+        });
+      });
     }
 
 

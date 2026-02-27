@@ -287,10 +287,36 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
     for a in anns:
         frame_anns[a.frame_index].append(a)
 
-    # Reference-style colors (BGR for OpenCV) - uniform green, red for nearby
+    # Load lane events for this video (cut-in/cut-out)
+    lane_events = db.query(models.LaneEvent).filter(
+        models.LaneEvent.video_id == video_id
+    ).all() if hasattr(models, 'LaneEvent') else []
+
+    # Build cut-in track set and event frame map
+    cutin_track_ids = set()
+    event_frame_map = defaultdict(list)  # frame_index -> [events]
+    for evt in lane_events:
+        cutin_track_ids.add(evt.track_id)
+        # Show label for a window of frames around the event
+        for f in range(max(0, evt.frame_index - 30), evt.frame_index + 30):
+            event_frame_map[f].append(evt)
+
+    # Build trajectory history (track_id -> sorted list of bottom-center positions)
+    track_trajectories = defaultdict(list)
+    for a in anns:
+        if a.track_id is not None:
+            cx = int((a.x1 + a.x2) / 2)
+            cy = int(a.y2)  # Bottom center
+            track_trajectories[a.track_id].append((a.frame_index, cx, cy))
+    # Sort each track by frame
+    for tid in track_trajectories:
+        track_trajectories[tid].sort(key=lambda x: x[0])
+
+    # Reference-style colors (BGR for OpenCV) - uniform green, red for cut-in/nearby
     COLOR_GREEN = (94, 197, 34)    # #22c55e in BGR
     COLOR_RED = (68, 68, 239)      # #ef4444 in BGR
     COLOR_CYAN = (212, 182, 6)     # #06b6d4 in BGR
+    COLOR_WHITE = (255, 255, 255)
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -315,23 +341,45 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
         if not ret:
             break
 
+        # Draw trajectory trails for all tracks visible in recent frames
+        for tid, positions in track_trajectories.items():
+            # Get positions up to current frame
+            trail = [(cx, cy) for fi, cx, cy in positions if fi <= frame_idx and fi > frame_idx - 60]
+            if len(trail) < 2:
+                continue
+            is_cutin = tid in cutin_track_ids
+            trail_color = COLOR_RED if is_cutin else COLOR_GREEN
+            for i, (cx, cy) in enumerate(trail):
+                alpha = (i + 1) / len(trail)
+                radius = 4 if is_cutin else 3
+                overlay = frame.copy()
+                cv2.circle(overlay, (cx, cy), radius, trail_color, -1)
+                cv2.addWeighted(overlay, alpha * 0.6, frame, 1 - alpha * 0.6, 0, frame)
+
         # Draw annotations for this frame
         if frame_idx in frame_anns:
             for ann in frame_anns[frame_idx]:
                 x1, y1 = int(ann.x1), int(ann.y1)
                 x2, y2 = int(ann.x2), int(ann.y2)
                 box_area = (x2 - x1) * (y2 - y1)
+                is_cutin_vehicle = ann.track_id in cutin_track_ids
 
-                # Color: cyan for traffic_light, red for nearby/large, green otherwise
-                if ann.class_label == 'traffic_light':
+                # Color: red for cut-in, cyan for traffic_light, green otherwise
+                if is_cutin_vehicle:
+                    color = COLOR_RED
+                    thickness = 3
+                elif ann.class_label == 'traffic_light':
                     color = COLOR_CYAN
+                    thickness = 2
                 elif box_area > frame_area * 0.15:
                     color = COLOR_RED
+                    thickness = 2
                 else:
                     color = COLOR_GREEN
+                    thickness = 2
 
                 # Draw box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
 
                 # Draw label (reference style: UPPERCASE @TRACK_ID)
                 label = f"{ann.class_label.upper()}"
@@ -344,6 +392,23 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
                 cv2.rectangle(frame, (x1, y1 - th - 6), (x1 + tw + 6, y1), color, -1)
                 cv2.putText(frame, label, (x1 + 3, y1 - 3),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1, cv2.LINE_AA)
+
+        # Draw PPT-style CUT-IN/CUT-OUT labels
+        if frame_idx in event_frame_map:
+            for evt in event_frame_map[frame_idx]:
+                if evt.bbox:
+                    ex1, ey1 = int(evt.bbox[0]), int(evt.bbox[1])
+                    ex2, ey2 = int(evt.bbox[2]), int(evt.bbox[3])
+
+                    # Thick red box
+                    cv2.rectangle(frame, (ex1, ey1), (ex2, ey2), COLOR_RED, 4)
+
+                    # "V{track_id} CUT-IN" label (PPT style)
+                    event_label = f"V{evt.track_id} CUT-IN" if evt.event_type == 'cut_in' else f"V{evt.track_id} CUT-OUT"
+                    (tw, th), _ = cv2.getTextSize(event_label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                    cv2.rectangle(frame, (ex1, ey1 - th - 10), (ex1 + tw + 10, ey1), COLOR_RED, -1)
+                    cv2.putText(frame, event_label, (ex1 + 5, ey1 - 5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLOR_WHITE, 2, cv2.LINE_AA)
 
         writer.write(frame)
         frame_idx += 1
