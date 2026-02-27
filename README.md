@@ -10,7 +10,10 @@
 
 **AI-powered traffic video annotation system with real-time vehicle detection, tracking, and analytics**
 
-[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-usage) • [Architecture](#-architecture) • [Tech Stack](#-tech-stack)
+[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-architecture) • [Architecture](#-architecture) • [Tech Stack](#-tech-stack)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Dakshbumb/traffic-annotation-system/blob/main/Smart_Traffic_Annotation_System.ipynb)
+
 
 </div>
 
