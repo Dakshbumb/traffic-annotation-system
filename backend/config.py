@@ -100,6 +100,7 @@ ALLOWED_CLASSES = [
     "bus",
     "motorcycle",
     "bicycle",
+    "traffic_light",
 ]
 
 # Mapping from COCO / YOLOv8 class indices to names we care about
@@ -111,7 +112,7 @@ YOLO_COCO_CLASS_MAP = {
     3: "motorcycle",
     5: "bus",
     7: "truck",
-    # we ignore all others
+    9: "traffic_light",
 }
 
 # Default thresholds for autolabel jobs
@@ -123,29 +124,30 @@ AUTO_DEFAULT_FRAME_STRIDE = 1
 # Per-class confidence thresholds (optional tuning)
 # ------------------------------
 CLASS_CONF_THRESHOLDS = {
-    "car": 0.35,         # Higher to reduce false positives on shadows
-    "truck": 0.35,       # Same for trucks
-    "bus": 0.35,         # Same for buses
-    "motorcycle": 0.40,  # Higher for smaller objects
-    "bicycle": 0.40,     # Same for bicycles  
-    "person": 0.50,      # Much higher to reduce false positives
+    "car": 0.30,              # Slightly lower for dashcam distant vehicles
+    "truck": 0.30,            # Same for trucks
+    "bus": 0.30,              # Same for buses
+    "motorcycle": 0.35,       # Smaller objects need slightly higher
+    "bicycle": 0.35,          # Same for bicycles  
+    "person": 0.45,           # Higher to reduce false positives
+    "traffic_light": 0.35,    # Traffic lights in dashcam view
 }
 
 # ------------------------------
 # Post-processing filters
 # ------------------------------
-MIN_BOX_AREA = int(os.getenv("MIN_BOX_AREA", "800"))           # Higher minimum to filter shadows
-ASPECT_RATIO_MIN = float(os.getenv("ASPECT_RATIO_MIN", "0.25")) # Reasonable ratio bounds
-ASPECT_RATIO_MAX = float(os.getenv("ASPECT_RATIO_MAX", "3.5"))
+MIN_BOX_AREA = int(os.getenv("MIN_BOX_AREA", "400"))           # Lower for dashcam distant vehicles
+ASPECT_RATIO_MIN = float(os.getenv("ASPECT_RATIO_MIN", "0.2"))  # Wider ratio for dashcam angles
+ASPECT_RATIO_MAX = float(os.getenv("ASPECT_RATIO_MAX", "4.0"))
 EDGE_MARGIN = int(os.getenv("EDGE_MARGIN", "10"))              # Pixels from edge to filter
 
 # ------------------------------
 # DeepSORT tracking parameters
 # ------------------------------
-DEEPSORT_MAX_AGE = int(os.getenv("DEEPSORT_MAX_AGE", "70"))           # Frames to keep track alive
-DEEPSORT_N_INIT = int(os.getenv("DEEPSORT_N_INIT", "3"))              # Frames before confirmation
-DEEPSORT_MAX_COSINE_DIST = float(os.getenv("DEEPSORT_MAX_COSINE_DIST", "0.3"))
-DEEPSORT_NN_BUDGET = int(os.getenv("DEEPSORT_NN_BUDGET", "100"))      # Max samples per track
+DEEPSORT_MAX_AGE = int(os.getenv("DEEPSORT_MAX_AGE", "120"))          # Longer persistence for dashcam tracking
+DEEPSORT_N_INIT = int(os.getenv("DEEPSORT_N_INIT", "2"))              # Faster track confirmation
+DEEPSORT_MAX_COSINE_DIST = float(os.getenv("DEEPSORT_MAX_COSINE_DIST", "0.25"))  # Stricter appearance matching
+DEEPSORT_NN_BUDGET = int(os.getenv("DEEPSORT_NN_BUDGET", "150"))      # Larger sample budget for better re-ID
 
 # ------------------------------
 # Preprocessing options

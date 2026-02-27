@@ -287,15 +287,10 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
     for a in anns:
         frame_anns[a.frame_index].append(a)
 
-    # Class colors (BGR for OpenCV)
-    CLASS_COLORS_BGR = {
-        'car': (94, 197, 34),       # green
-        'truck': (22, 115, 249),    # orange
-        'bus': (8, 179, 234),       # yellow
-        'motorcycle': (212, 182, 6),# cyan
-        'bicycle': (239, 70, 217),  # magenta
-        'person': (68, 68, 239),    # red
-    }
+    # Reference-style colors (BGR for OpenCV) - uniform green, red for nearby
+    COLOR_GREEN = (94, 197, 34)    # #22c55e in BGR
+    COLOR_RED = (68, 68, 239)      # #ef4444 in BGR
+    COLOR_CYAN = (212, 182, 6)     # #06b6d4 in BGR
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -305,6 +300,7 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_area = width * height
 
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     out_filename = f"annotated_video_{video_id}_{ts}.mp4"
@@ -322,24 +318,32 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
         # Draw annotations for this frame
         if frame_idx in frame_anns:
             for ann in frame_anns[frame_idx]:
-                color = CLASS_COLORS_BGR.get(ann.class_label, (255, 255, 255))
                 x1, y1 = int(ann.x1), int(ann.y1)
                 x2, y2 = int(ann.x2), int(ann.y2)
+                box_area = (x2 - x1) * (y2 - y1)
+
+                # Color: cyan for traffic_light, red for nearby/large, green otherwise
+                if ann.class_label == 'traffic_light':
+                    color = COLOR_CYAN
+                elif box_area > frame_area * 0.15:
+                    color = COLOR_RED
+                else:
+                    color = COLOR_GREEN
 
                 # Draw box
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-                # Draw label background
-                label = f"{ann.class_label}"
+                # Draw label (reference style: UPPERCASE @TRACK_ID)
+                label = f"{ann.class_label.upper()}"
                 if ann.track_id is not None:
-                    label += f" #{ann.track_id}"
+                    label += f" @{ann.track_id}"
                 if ann.extra_meta and ann.extra_meta.get('speed_kmh'):
                     label += f" {ann.extra_meta['speed_kmh']}km/h"
 
-                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 6, y1), color, -1)
-                cv2.putText(frame, label, (x1 + 3, y1 - 4),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+                cv2.rectangle(frame, (x1, y1 - th - 6), (x1 + tw + 6, y1), color, -1)
+                cv2.putText(frame, label, (x1 + 3, y1 - 3),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1, cv2.LINE_AA)
 
         writer.write(frame)
         frame_idx += 1

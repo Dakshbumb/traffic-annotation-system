@@ -117,6 +117,7 @@ CLASS_ID_MAP = {
     "motorcycle": 3,
     "bicycle": 4,
     "person": 5,
+    "traffic_light": 6,
 }
 
 def get_class_id(class_name: str) -> int:

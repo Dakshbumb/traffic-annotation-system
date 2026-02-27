@@ -674,7 +674,7 @@
 
     const ZONE_COLORS = { 'ego': '#22c55e', 'adjacent_left': '#3b82f6', 'adjacent_right': '#a855f7' };
 
-    const CLASS_COLORS = { 'car': '#22c55e', 'truck': '#f97316', 'bus': '#eab308', 'motorcycle': '#06b6d4', 'bicycle': '#d946ef', 'person': '#ef4444' };
+    const CLASS_COLORS = { 'car': '#22c55e', 'truck': '#22c55e', 'bus': '#22c55e', 'motorcycle': '#22c55e', 'bicycle': '#22c55e', 'person': '#22c55e', 'traffic_light': '#06b6d4' };
 
     // ELEMENTS
     const canvas = document.getElementById("canvas");
@@ -738,22 +738,35 @@
 
       // Draw Annotations
       annotations.forEach(ann => {
-        const color = CLASS_COLORS[ann.class_label] || '#fff';
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
         const w = ann.x2 - ann.x1;
         const h = ann.y2 - ann.y1;
+        const area = w * h;
+        const canvasArea = canvas.width * canvas.height;
+
+        // Red for nearby/large vehicles (>15% of frame), green for others, cyan for traffic lights
+        let color;
+        if (ann.class_label === 'traffic_light') {
+          color = '#06b6d4';
+        } else if (area > canvasArea * 0.15) {
+          color = '#ef4444'; // Red for nearby vehicles
+        } else {
+          color = '#22c55e'; // Green for normal
+        }
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
 
         // Box
         ctx.strokeRect(ann.x1, ann.y1, w, h);
 
-        // Label
+        // Label (reference style: UPPERCASE @TRACK_ID)
+        const label = `${ann.class_label.toUpperCase()} @${ann.track_id || ''}`;
         ctx.fillStyle = color;
-        ctx.font = "bold 12px Inter";
-        const label = `${ann.class_label} #${ann.track_id || ''}`;
-        ctx.fillRect(ann.x1, ann.y1 - 20, ctx.measureText(label).width + 10, 20);
+        const textWidth = ctx.measureText(label).width + 10;
+        ctx.fillRect(ann.x1, ann.y1 - 18, textWidth, 18);
         ctx.fillStyle = '#000';
-        ctx.fillText(label, ann.x1 + 5, ann.y1 - 5);
+        ctx.font = "bold 11px Inter";
+        ctx.fillText(label, ann.x1 + 4, ann.y1 - 4);
       });
 
       // Draw Analytics Lines
