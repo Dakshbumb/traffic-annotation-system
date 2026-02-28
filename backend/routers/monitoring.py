@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Dict, List, Any
 from datetime import datetime
+import threading
 
 from database import get_db
 import models
@@ -17,7 +18,8 @@ router = APIRouter(
     tags=["monitoring"],
 )
 
-# Global stats (shared across requests)
+# Global stats (shared across requests — protected by lock)
+_stats_lock = threading.Lock()
 _system_stats = {
     "start_time": datetime.utcnow().isoformat(),
     "total_jobs_completed": 0,
@@ -219,12 +221,14 @@ def get_video_stats(video_id: int, db: Session = Depends(get_db)):
 
 
 def update_system_stats(frames: int = 0, detections: int = 0, id_switches: int = 0):
-    """Update global system stats (called from worker)."""
-    _system_stats["total_frames_processed"] += frames
-    _system_stats["total_detections"] += detections
-    _system_stats["total_id_switches"] += id_switches
+    """Update global system stats (called from worker). Thread-safe."""
+    with _stats_lock:
+        _system_stats["total_frames_processed"] += frames
+        _system_stats["total_detections"] += detections
+        _system_stats["total_id_switches"] += id_switches
 
 
 def increment_jobs_completed():
-    """Increment completed jobs counter."""
-    _system_stats["total_jobs_completed"] += 1
+    """Increment completed jobs counter. Thread-safe."""
+    with _stats_lock:
+        _system_stats["total_jobs_completed"] += 1

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -13,11 +13,12 @@ class Video(Base):
     original_filename = Column(String)                        # uploaded name
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    annotations = relationship(
-        "Annotation",
-        back_populates="video",
-        cascade="all, delete-orphan",
-    )
+    # --- Relationships (all defined here, not monkeypatched) ---
+    annotations = relationship("Annotation", back_populates="video", cascade="all, delete-orphan")
+    analytics_lines = relationship("AnalyticsLine", back_populates="video", cascade="all, delete-orphan")
+    lane_zones = relationship("LaneZone", back_populates="video", cascade="all, delete-orphan")
+    lane_events = relationship("LaneEvent", back_populates="video", cascade="all, delete-orphan")
+    near_miss_events = relationship("NearMissEvent", back_populates="video", cascade="all, delete-orphan")
 
 
 class Annotation(Base):
@@ -109,18 +110,11 @@ class NearMissEvent(Base):
     frame_index = Column(Integer, index=True)
     track_id_1 = Column(Integer)
     track_id_2 = Column(Integer)
-    ttc: float = Column(Float)            # Time To Collision in seconds
-    distance: float = Column(Float)       # Pixel distance at event
-    relative_speed: float = Column(Float) # Relative speed in pixels/frame (or calibrated units)
+    ttc = Column(Float)                           # Time To Collision in seconds
+    distance = Column(Float)                       # Pixel distance at event
+    relative_speed = Column(Float)                 # Relative speed in pixels/frame (or calibrated units)
     severity = Column(String)             # "info", "warning", "critical"
     created_at = Column(DateTime, default=datetime.utcnow)
 
     video = relationship("Video", back_populates="near_miss_events")
-
-
-# Add back-references to Video
-Video.analytics_lines = relationship("AnalyticsLine", back_populates="video", cascade="all, delete-orphan")
-Video.lane_zones = relationship("LaneZone", back_populates="video", cascade="all, delete-orphan")
-Video.lane_events = relationship("LaneEvent", back_populates="video", cascade="all, delete-orphan")
-Video.near_miss_events = relationship("NearMissEvent", back_populates="video", cascade="all, delete-orphan")
 

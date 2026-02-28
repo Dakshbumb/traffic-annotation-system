@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -98,7 +100,13 @@ def get_annotations_for_video(
         .all()
     )
 
-def get_track_annotations_in_range(db, video_id, track_id, start_frame, end_frame):
+def get_track_annotations_in_range(
+    db: Session,
+    video_id: int,
+    track_id: int,
+    start_frame: int,
+    end_frame: int,
+) -> List[models.Annotation]:
     return (
         db.query(models.Annotation)
         .filter(models.Annotation.video_id == video_id)
@@ -109,7 +117,12 @@ def get_track_annotations_in_range(db, video_id, track_id, start_frame, end_fram
         .all()
     )
 
-def find_track_frame(db, video_id, track_id, frame_index):
+def find_track_frame(
+    db: Session,
+    video_id: int,
+    track_id: int,
+    frame_index: int,
+) -> Optional[models.Annotation]:
     return (
         db.query(models.Annotation)
         .filter(models.Annotation.video_id == video_id)
@@ -118,9 +131,6 @@ def find_track_frame(db, video_id, track_id, frame_index):
         .first()
     )
 
-
-import uuid
-from datetime import datetime
 
 def create_autolabel_job(db: Session, video_id: int, params: dict) -> models.AutolabelJob:
     job_uuid = f"alb_{uuid.uuid4().hex[:16]}"

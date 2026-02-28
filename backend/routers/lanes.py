@@ -6,7 +6,7 @@ Endpoints for managing lane zones and detecting lane change events.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 import logging
 
@@ -38,8 +38,7 @@ class LaneZoneResponse(BaseModel):
     points: List[List[float]]
     color: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LaneEventResponse(BaseModel):
@@ -53,8 +52,7 @@ class LaneEventResponse(BaseModel):
     confidence: float
     bbox: List[float]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AnalyzeResponse(BaseModel):

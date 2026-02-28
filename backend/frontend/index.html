@@ -43,6 +43,8 @@
       color: var(--text-primary);
       min-height: 100vh;
       overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Header */
@@ -85,10 +87,14 @@
     .toolbar {
       display: flex;
       align-items: center;
-      gap: 20px;
+      flex-wrap: wrap;
+      gap: 10px 20px;
       padding: 15px 30px;
       background: var(--bg-secondary);
       border-bottom: 1px solid var(--border-color);
+      overflow: visible;
+      position: relative;
+      z-index: 10;
     }
 
     .toolbar-divider {
@@ -183,9 +189,11 @@
     /* Layout */
     .main-container {
       display: flex;
-      height: calc(100vh - 140px);
+      flex: 1;
+      min-height: 0;
       padding: 20px;
       gap: 20px;
+      overflow: hidden;
     }
 
     .canvas-container {
@@ -1065,26 +1073,32 @@
       }
     };
 
-    // VIDEO UPLOAD HANDLER
-    document.getElementById('videoFileInput').addEventListener('change', async (e) => {
+    // VIDEO UPLOAD HANDLER (with progress tracking via XMLHttpRequest)
+    document.getElementById('videoFileInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
       const uploadBtn = document.getElementById('uploadBtn');
-      uploadBtn.innerHTML = '<span class="btn-icon">⏳</span> Uploading...';
+      uploadBtn.innerHTML = '<span class="btn-icon">⏳</span> Uploading… 0%';
       uploadBtn.disabled = true;
 
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
+      const formData = new FormData();
+      formData.append('file', file);
 
-        const res = await fetch('/api/videos/upload', {
-          method: 'POST',
-          body: formData
-        });
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/videos/upload');
 
-        if (res.ok) {
-          const video = await res.json();
+      // Real-time progress updates
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          const pct = Math.round((evt.loaded / evt.total) * 100);
+          uploadBtn.innerHTML = `<span class="btn-icon">⏳</span> Uploading… ${pct}%`;
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const video = JSON.parse(xhr.responseText);
           // Add to dropdown and select it
           const opt = document.createElement("option");
           opt.value = video.id;
@@ -1096,16 +1110,26 @@
           alert(`Video uploaded successfully! ID: ${video.id}\nNow click "Start Auto-Label" to process it.`);
           loadFrame(0);
         } else {
-          const err = await res.json();
-          alert(`Upload failed: ${err.detail || 'Unknown error'}`);
+          try {
+            const err = JSON.parse(xhr.responseText);
+            alert(`Upload failed: ${err.detail || 'Unknown error'}`);
+          } catch (_) {
+            alert(`Upload failed (HTTP ${xhr.status})`);
+          }
         }
-      } catch (err) {
-        alert(`Upload error: ${err.message}`);
-      } finally {
         uploadBtn.innerHTML = '<span class="btn-icon">📤</span> Upload Video';
         uploadBtn.disabled = false;
-        e.target.value = ''; // Reset file input
-      }
+        e.target.value = '';
+      };
+
+      xhr.onerror = () => {
+        alert('Upload error: network failure');
+        uploadBtn.innerHTML = '<span class="btn-icon">📤</span> Upload Video';
+        uploadBtn.disabled = false;
+        e.target.value = '';
+      };
+
+      xhr.send(formData);
     });
 
     // AUTO-LABEL HANDLER

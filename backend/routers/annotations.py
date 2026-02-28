@@ -147,6 +147,7 @@ def get_annotations_for_frame(
                 "y1": a.y1,
                 "x2": a.x2,
                 "y2": a.y2,
+                "extra_meta": a.extra_meta,
             }
             for a in anns
         ],

@@ -1,11 +1,10 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from database import get_db
 import models
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from collision_detector import detect_near_misses, DetectedNearMiss
 
 router = APIRouter(
@@ -26,8 +25,7 @@ class NearMissEventResponse(BaseModel):
     relative_speed: float
     severity: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SafetyAnalysisResponse(BaseModel):
     events_detected: int

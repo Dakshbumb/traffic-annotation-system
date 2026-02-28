@@ -72,10 +72,7 @@ def load_yolo_model() -> YOLO:
                 logger.info(f"Retrying in {delay}s...")
                 time.sleep(delay)
             else:
-                logger.critical("Failed to load YOLO model after all retries")
                 raise RuntimeError(f"Could not load YOLO model: {e}")
-    
-    return None
 
 
 # Load model at startup
@@ -381,13 +378,22 @@ def _run_job(job_id: str):
 
 
 def _worker_loop():
-    """Background worker that processes queued jobs."""
+    """Background worker that processes queued jobs via signal queue."""
+    from job_store import wait_for_job
     logger.info("Worker loop started")
     while True:
-        for job in list(job_store.values()):
-            if job["status"] == "queued":
-                _run_job(job["job_id"])
-        time.sleep(2)
+        try:
+            # Block until a job is signalled (or timeout for safety)
+            job_id = wait_for_job(timeout=5.0)
+            if job_id is None:
+                continue
+            job = job_store.get(job_id)
+            if job and job["status"] == "queued":
+                logger.info(f"Picking up queued job: {job_id} (video {job['video_id']})")
+                _run_job(job_id)
+        except Exception as e:
+            logger.error(f"Worker loop error (will retry): {e}")
+            traceback.print_exc()
 
 
 def start_worker():
@@ -395,3 +401,4 @@ def start_worker():
     thread = threading.Thread(target=_worker_loop, daemon=True)
     thread.start()
     logger.info("Worker thread running")
+

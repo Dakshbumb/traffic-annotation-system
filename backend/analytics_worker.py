@@ -1,11 +1,7 @@
-import time
 import logging
-import math
-import numpy as np
 from sqlalchemy.orm import Session
 from database import SessionLocal
 import models
-import crud
 
 logger = logging.getLogger("analytics_worker")
 

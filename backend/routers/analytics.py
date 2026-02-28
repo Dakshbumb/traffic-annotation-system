@@ -6,6 +6,7 @@ from database import get_db
 import models
 import schemas
 from analytics_processor import process_video_analytics
+from speed_estimator import update_annotation_speeds, get_speed_stats
 
 router = APIRouter(
     prefix="/api/analytics",
@@ -81,8 +82,6 @@ def run_analytics_process(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ------------------- SPEED ESTIMATION -------------------
-from speed_estimator import update_annotation_speeds, get_speed_stats
 
 @router.post("/speed/{video_id}")
 def calculate_speeds(

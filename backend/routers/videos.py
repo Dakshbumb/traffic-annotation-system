@@ -1,5 +1,4 @@
 from typing import List
-import shutil
 import time
 
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
@@ -25,20 +24,45 @@ async def upload_video(
     Upload a video file and store metadata in the DB.
     Uses the SAME UPLOAD_DIR as everywhere else.
     """
-    # Make sure uploads dir exists (config already does this, but harmless)
+    # --- Validation ---
+    ALLOWED_EXTENSIONS = {"mp4", "avi", "mov", "mkv", "webm"}
+    MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
+
+    ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "")
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type '.{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+
+    # Make sure uploads dir exists
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     # Create unique stored filename
     ts = int(time.time() * 1000)
-    ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "mp4")
     stored_filename = f"{ts}.{ext}"
 
     # Destination path using pathlib
     dst_path = UPLOAD_DIR / stored_filename
 
-    # Save file to disk
+    # Save file to disk using async chunked writes (1 MB at a time)
+    # Also enforce max file size during upload
+    CHUNK_SIZE = 1024 * 1024  # 1 MB
+    total_written = 0
     with dst_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        while True:
+            chunk = await file.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            total_written += len(chunk)
+            if total_written > MAX_FILE_SIZE:
+                buffer.close()
+                dst_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024*1024)} GB.",
+                )
+            buffer.write(chunk)
 
     # Save DB record – store ONLY the name, not the full path
     video_in = schemas.VideoCreate(

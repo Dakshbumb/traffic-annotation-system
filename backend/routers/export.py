@@ -5,11 +5,14 @@ Supports: COCO JSON, YOLO TXT, Pascal VOC XML, Custom JSON, CSV
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.background import BackgroundTask
 from sqlalchemy.orm import Session
+from collections import defaultdict
 
 from datetime import datetime
 from typing import Dict
 import os
+import csv
 import shutil
 import cv2
 
@@ -32,6 +35,16 @@ router = APIRouter(
 
 # Ensure export dir exists
 os.makedirs(EXPORT_DIR, exist_ok=True)
+
+
+def _cleanup_export(folder_path: str, zip_path: str):
+    """Remove temporary export folder and its zip after response is sent."""
+    try:
+        shutil.rmtree(folder_path, ignore_errors=True)
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+    except OSError:
+        pass
 
 
 def get_video_metadata(video_path: str) -> Dict:
@@ -73,6 +86,7 @@ def export_coco(video_id: int, db: Session = Depends(get_db)):
         path=filepath,
         media_type="application/json",
         filename=filename,
+        background=BackgroundTask(os.remove, filepath),
     )
 
 
@@ -106,6 +120,7 @@ def export_yolo(video_id: int, db: Session = Depends(get_db)):
         path=zip_path,
         media_type="application/zip",
         filename=f"{folder_name}.zip",
+        background=BackgroundTask(_cleanup_export, folder_path, zip_path),
     )
 
 
@@ -136,6 +151,7 @@ def export_voc(video_id: int, db: Session = Depends(get_db)):
         path=zip_path,
         media_type="application/zip",
         filename=f"{folder_name}.zip",
+        background=BackgroundTask(_cleanup_export, folder_path, zip_path),
     )
 
 
@@ -164,6 +180,7 @@ def export_json(video_id: int, db: Session = Depends(get_db)):
         path=filepath,
         media_type="application/json",
         filename=filename,
+        background=BackgroundTask(os.remove, filepath),
     )
 
 
@@ -191,6 +208,7 @@ def export_csv_endpoint(video_id: int, db: Session = Depends(get_db)):
         path=filepath,
         media_type="text/csv",
         filename=filename,
+        background=BackgroundTask(os.remove, filepath),
     )
 
 
@@ -212,6 +230,7 @@ def export_analytics_csv_endpoint(video_id: int, db: Session = Depends(get_db)):
         path=filepath,
         media_type="text/csv",
         filename=filename,
+        background=BackgroundTask(os.remove, filepath),
     )
 
 
@@ -219,7 +238,6 @@ def export_analytics_csv_endpoint(video_id: int, db: Session = Depends(get_db)):
 @router.get("/yolo_mot/{video_id}")
 def export_yolo_mot(video_id: int, db: Session = Depends(get_db)):
     """Legacy: Export in YOLO-MOT style (frame, track_id, x, y, w, h, conf, class, vis)."""
-    import csv
     
     video = db.query(models.Video).filter(models.Video.id == video_id).first()
     if not video:
@@ -258,6 +276,7 @@ def export_yolo_mot(video_id: int, db: Session = Depends(get_db)):
         path=zip_path,
         media_type="application/zip",
         filename=f"{folder_name}.zip",
+        background=BackgroundTask(_cleanup_export, folder_path, zip_path),
     )
 
 
@@ -282,7 +301,6 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="No annotations found for this video")
 
     # Group annotations by frame
-    from collections import defaultdict
     frame_anns = defaultdict(list)
     for a in anns:
         frame_anns[a.frame_index].append(a)
@@ -290,7 +308,7 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
     # Load lane events for this video (cut-in/cut-out)
     lane_events = db.query(models.LaneEvent).filter(
         models.LaneEvent.video_id == video_id
-    ).all() if hasattr(models, 'LaneEvent') else []
+    ).all()
 
     # Build cut-in track set and event frame map
     cutin_track_ids = set()
@@ -420,4 +438,5 @@ def export_annotated_video(video_id: int, db: Session = Depends(get_db)):
         path=out_path,
         media_type="video/mp4",
         filename=out_filename,
+        background=BackgroundTask(os.remove, out_path),
     )
